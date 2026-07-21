@@ -47,13 +47,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     welcome_text = (
         f"Merhaba {user.first_name}! 🚌\n\n"
-        f"**Belediye Otobüs Teknik Takip Botu**'na hoş geldiniz.\n\n"
-        f"• Doğrudan bir **plaka yazarak** (Örn: `46 H 0123`) son servis kayıtlarını sorgulayabilirsiniz.\n"
-        f"• Yeni servis kaydı açmak için bir **fotoğraf atabilir** veya /yeni_kayit komutunu kullanabilirsiniz.\n"
+        f"Belediye Otobüs Teknik Takip Botuna hoş geldiniz.\n\n"
+        f"• Doğrudan bir plaka yazarak (Örn: 46 H 0123) son servis kayıtlarını sorgulayabilirsiniz.\n"
+        f"• Yeni servis kaydı açmak için bir fotoğraf atabilir veya /yeni_kayit komutunu kullanabilirsiniz.\n"
         f"• Alt menüden Web Paneline erişebilirsiniz."
     )
     
-    await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=reply_markup)
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
 
 async def plaka_sorgula(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
