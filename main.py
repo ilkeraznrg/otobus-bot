@@ -27,7 +27,6 @@ supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 PLAKA, ISLEM, GARANTI, FOTO = range(4)
 
 
-# Helper: Plaka Formatlama
 def format_plaka(plaka: str) -> str:
     """Plakayı büyük harfe çevirir ve boşlukları düzenler."""
     return re.sub(r"\s+", " ", plaka.strip().upper())
@@ -39,48 +38,43 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start komutu ve TWA Butonu."""
     user = update.effective_user
     
-    # Persistent Keyboard ile TWA Butonu
     keyboard = [
         [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
     welcome_text = (
-        f"Merhaba {user.first_name}! 🚌\n\n"
-        f"Belediye Otobüs Teknik Takip Botuna hoş geldiniz.\n\n"
-        f"• Doğrudan bir plaka yazarak (Örn: 46 H 0123) son servis kayıtlarını sorgulayabilirsiniz.\n"
-        f"• Yeni servis kaydı açmak için bir fotoğraf atabilir veya /yeni_kayit komutunu kullanabilirsiniz.\n"
+        f"Merhaba <b>{user.first_name}</b>! 🚌\n\n"
+        f"<b>Belediye Otobüs Teknik Takip Botu</b>'na hoş geldiniz.\n\n"
+        f"• Doğrudan bir <b>plaka yazarak</b> (Örn: <code>46 H 0123</code>) son servis kayıtlarını sorgulayabilirsiniz.\n"
+        f"• Yeni servis kaydı açmak için bir <b>fotoğraf atabilir</b> veya /yeni_kayit komutunu kullanabilirsiniz.\n"
         f"• Alt menüden Web Paneline erişebilirsiniz."
     )
     
-    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+    await update.message.reply_text(welcome_text, parse_mode="HTML", reply_markup=reply_markup)
 
 
 async def plaka_sorgula(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Metin olarak girilen plakayı arar."""
     raw_text = update.message.text
     
-    # Eğer gelen metin buton tetiklemesiyse pas geç
     if raw_text == "📱 Servis Panelini Aç":
         return
 
     plaka = format_plaka(raw_text)
 
     try:
-        # Otobüs bilgisi al
         otobus_res = supabase.table("otobusler").select("*").eq("plaka", plaka).execute()
         
         if not otobus_res.data:
-            text = f"⚠️ **{plaka}** plakalı otobüs sistemde bulunamadı."
-            # Inline keyboard ile ekleme seçeneği
+            text = f"⚠️ <b>{plaka}</b> plakalı otobüs sistemde bulunamadı."
             keyboard = [[InlineKeyboardButton("➕ Bu Plakayı Kaydet", callback_data=f"add_{plaka}")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
+            await update.message.reply_text(text, parse_mode="HTML", reply_markup=reply_markup)
             return
 
         otobus = otobus_res.data[0]
         
-        # Son servis kayıtlarını al (En güncel 3 kayıt)
         servis_res = (
             supabase.table("servis_kayitlari")
             .select("*")
@@ -90,25 +84,25 @@ async def plaka_sorgula(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             .execute()
         )
 
-        msg = f"🚌 **ARAÇ BİLGİSİ**\n"
-        msg += f"**Plaka:** `{otobus['plaka']}`\n"
-        msg += f"**Hat No:** {otobus.get('hat_no') or 'Belirtilmedi'}\n"
-        msg += f"**Sürücü İletişim:** {otobus.get('sofor_iletisim') or 'Belirtilmedi'}\n"
+        msg = f"🚌 <b>ARAÇ BİLGİSİ</b>\n"
+        msg += f"<b>Plaka:</b> <code>{otobus['plaka']}</code>\n"
+        msg += f"<b>Hat No:</b> {otobus.get('hat_no') or 'Belirtilmedi'}\n"
+        msg += f"<b>Sürücü İletişim:</b> {otobus.get('sofor_iletisim') or 'Belirtilmedi'}\n"
         msg += f"───────────────────\n\n"
 
         if servis_res.data:
-            msg += f"🛠 **SON SERVİS KAYITLARI:**\n\n"
+            msg += f"🛠 <b>SON SERVİS KAYITLARI:</b>\n\n"
             for kayit in servis_res.data:
-                msg += f"📅 **Tarih:** {kayit['tarih']}\n"
-                msg += f"🔧 **İşlem:** {kayit['yapilan_islem']}\n"
-                msg += f"🛡 **Garanti Bitiş:** {kayit.get('garanti_bitis') or 'Yok'}\n"
+                msg += f"📅 <b>Tarih:</b> {kayit['tarih']}\n"
+                msg += f"🔧 <b>İşlem:</b> {kayit['yapilan_islem']}\n"
+                msg += f"🛡 <b>Garanti Bitiş:</b> {kayit.get('garanti_bitis') or 'Yok'}\n"
                 if kayit.get('foto_url'):
-                    msg += f"🖼 [Servis Fotoğrafı]({kayit['foto_url']})\n"
+                    msg += f"🖼 <a href='{kayit['foto_url']}'>Servis Fotoğrafı</a>\n"
                 msg += f"---------------------\n"
         else:
             msg += "ℹ️ Bu araca ait henüz bir servis kaydı bulunmuyor."
 
-        await update.message.reply_text(msg, parse_mode="Markdown", disable_web_page_preview=False)
+        await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=False)
 
     except Exception as e:
         logger.error(f"Sorgu hatası: {e}")
@@ -118,15 +112,13 @@ async def plaka_sorgula(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 # --- SERVİS KAYDI CONVERSATION HANDLER ---
 
 async def kayit_baslat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Süreç fotoğraf gönderilerek veya /yeni_kayit ile başlatılabilir."""
-    context.user_data.clear() # Geçmiş veriyi temizle
+    context.user_data.clear()
     
-    # Fotoğraf ile başlatıldıysa fotoğrafı hafızaya al
     if update.message.photo:
-        context.user_data['photo'] = update.message.photo[-1] # En yüksek çözünürlük
-        await update.message.reply_text("📸 Fotoğraf alındı!\n\nLütfen işlem yapılan **Otobüs Plakasını** girin:")
+        context.user_data['photo'] = update.message.photo[-1]
+        await update.message.reply_text("📸 Fotoğraf alındı!\n\nLütfen işlem yapılan <b>Otobüs Plakasını</b> girin:", parse_mode="HTML")
     else:
-        await update.message.reply_text("📝 **Yeni Servis Kaydı**\n\nLütfen otobüs plakasını girin (Örn: 46 H 0123):")
+        await update.message.reply_text("📝 <b>Yeni Servis Kaydı</b>\n\nLütfen otobüs plakasını girin (Örn: 46 H 0123):", parse_mode="HTML")
     
     return PLAKA
 
@@ -135,7 +127,6 @@ async def kayit_plaka_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     plaka = format_plaka(update.message.text)
     context.user_data['plaka'] = plaka
 
-    # Araç var mı kontrol et, yoksa otomatik oluştur
     try:
         res = supabase.table("otobusler").select("plaka").eq("plaka", plaka).execute()
         if not res.data:
@@ -143,7 +134,7 @@ async def kayit_plaka_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except Exception as e:
         logger.error(f"Plaka kontrol/ekleme hatası: {e}")
 
-    await update.message.reply_text(f"✅ Plaka: **{plaka}**\n\nYapılan **teknik işlemi / tamiri** detaylıca yazın:")
+    await update.message.reply_text(f"✅ Plaka: <b>{plaka}</b>\n\nYapılan <b>teknik işlemi / tamiri</b> detaylıca yazın:", parse_mode="HTML")
     return ISLEM
 
 
@@ -151,8 +142,9 @@ async def kayit_islem_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data['islem'] = update.message.text
     await update.message.reply_text(
         "Garanti bitiş tarihi var mı?\n"
-        "Varsa `YYYY-AA-GG` formatında yazın (Örn: `2025-12-31`).\n"
-        "Yoksa **Pas** yazın veya aşağıdaki butona basın.",
+        "Varsa <code>YYYY-AA-GG</code> formatında yazın (Örn: <code>2025-12-31</code>).\n"
+        "Yoksa <b>Pas</b> yazın veya aşağıdaki butona basın.",
+        parse_mode="HTML",
         reply_markup=ReplyKeyboardMarkup([["Pas"]], resize_keyboard=True, one_time_keyboard=True)
     )
     return GARANTI
@@ -165,22 +157,20 @@ async def kayit_garanti_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         context.user_data['garanti'] = None
     else:
         try:
-            # Tarih formatı doğrulama
             valid_date = datetime.strptime(text, "%Y-%m-%d").date()
             context.user_data['garanti'] = str(valid_date)
         except ValueError:
-            await update.message.reply_text("⚠️ Geçersiz tarih formatı! Lütfen `YYYY-AA-GG` şeklinde girin veya 'Pas' yazın:")
+            await update.message.reply_text("⚠️ Geçersiz tarih formatı! Lütfen <code>YYYY-AA-GG</code> şeklinde girin veya 'Pas' yazın:", parse_mode="HTML")
             return GARANTI
 
-    # Fotoğraf daha önce yüklenmediyse iste
     if 'photo' not in context.user_data:
         await update.message.reply_text(
-            "📷 Servis işlemiyle ilgili bir **fotoğraf gönderin** veya fotoğraf yoksa **Pas** yazın:",
+            "📷 Servis işlemiyle ilgili bir <b>fotoğraf gönderin</b> veya fotoğraf yoksa <b>Pas</b> yazın:",
+            parse_mode="HTML",
             reply_markup=ReplyKeyboardMarkup([["Pas"]], resize_keyboard=True, one_time_keyboard=True)
         )
         return FOTO
     else:
-        # Fotoğraf zaten başta verildiyse direkt kaydet
         return await kayit_tamamla(update, context)
 
 
@@ -197,28 +187,23 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     foto_url = None
     photo_item = context.user_data.get('photo')
 
-    # Fotoğraf varsa Supabase Storage'a yükle
     if photo_item:
         try:
             file = await context.bot.get_file(photo_item.file_id)
             file_bytes = await file.download_as_bytearray()
             
-            # Benzersiz dosya adı üret
             file_path = f"{context.user_data['plaka']}_{uuid.uuid4().hex[:8]}.jpg"
             
-            # Storage'a Yükle
             supabase.storage.from_("servis-fotolari").upload(
                 file_path, 
                 bytes(file_bytes),
                 file_options={"content-type": "image/jpeg"}
             )
             
-            # Public URL Al
             foto_url = supabase.storage.from_("servis-fotolari").get_public_url(file_path)
         except Exception as e:
             logger.error(f"Fotoğraf yükleme hatası: {e}")
 
-    # Veritabanına Servis Kaydını Ekle
     try:
         kayit_payload = {
             "plaka": context.user_data['plaka'],
@@ -228,11 +213,10 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         }
         supabase.table("servis_kayitlari").insert(kayit_payload).execute()
         
-        # Ana klavyeyi tekrar yükle
         keyboard = [[KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))]]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-        await update.message.reply_text("🎉 **Servis kaydı başarıyla eklendi!**", parse_mode="Markdown", reply_markup=reply_markup)
+        await update.message.reply_text("🎉 <b>Servis kaydı başarıyla eklendi!</b>", parse_mode="HTML", reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"DB Kayıt hatası: {e}")
         await update.message.reply_text("❌ Servis kaydı oluşturulurken bir hata oluştu.")
@@ -247,12 +231,11 @@ async def kayit_iptal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     return ConversationHandler.END
 
 
-# --- MAIN BOOTSTRAP ---
+# --- MAIN ---
 
 def main():
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
 
-    # Conversation Handler (Adım Adım Kayıt)
     kayit_handler = ConversationHandler(
         entry_points=[
             CommandHandler("yeni_kayit", kayit_baslat),
@@ -272,7 +255,6 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(kayit_handler)
-    # Metin aramaları için (Plaka Sorgulama)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, plaka_sorgula))
 
     logger.info("Bot başlatılıyor...")
