@@ -1,6 +1,9 @@
 import logging
 import re
 import uuid
+import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from threading import Thread
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -20,6 +23,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# --- RENDER TIMEOUT ENGELLEYİCİ (DUMMY SERVER) ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot 7/24 Aktif!")
+
+    def log_message(self, format, *args):
+        return # Log kirliliğini önlemek için kapalı
+
+def run_health_check_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    logger.info(f"Render Portu Dinleniyor: {port}")
+    server.serve_forever()
+# --------------------------------------------------
+
 # Supabase İstemcisi
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
@@ -28,14 +48,12 @@ PLAKA, ISLEM, GARANTI, FOTO = range(4)
 
 
 def format_plaka(plaka: str) -> str:
-    """Plakayı büyük harfe çevirir ve boşlukları düzenler."""
     return re.sub(r"\s+", " ", plaka.strip().upper())
 
 
 # --- KOMUT HANDLERLARI ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Start komutu ve TWA Butonu."""
     user = update.effective_user
     
     keyboard = [
@@ -51,12 +69,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"• Alt menüden Web Paneline erişebilirsiniz."
     )
     
-    # parse_mode tamamen kaldırıldı - hata verme ihtimali 0!
     await update.message.reply_text(welcome_text, reply_markup=reply_markup)
 
 
 async def plaka_sorgula(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Metin olarak girilen plakayı arar."""
     raw_text = update.message.text
     
     if raw_text == "📱 Servis Panelini Aç":
@@ -233,6 +249,9 @@ async def kayit_iptal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 # --- MAIN ---
 
 def main():
+    # Arka planda Render Port sunucusunu başlat
+    Thread(target=run_health_check_server, daemon=True).start()
+
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
 
     kayit_handler = ConversationHandler(
@@ -256,7 +275,7 @@ def main():
     app.add_handler(kayit_handler)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, plaka_sorgula))
 
-    logger.info("Bot başlatılıyor...")
+    logger.info("Bot ve Sunucu başlatılıyor...")
     app.run_polling(drop_pending_updates=True)
 
 
