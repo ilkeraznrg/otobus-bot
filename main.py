@@ -23,7 +23,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- RENDER TIMEOUT ENGELLEYİCİ (DUMMY SERVER) ---
+# --- RENDER TIMEOUT ENGELLEYİCİ (HEALTH CHECK SERVER) ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -31,7 +31,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"Bot 7/24 Aktif!")
 
     def log_message(self, format, *args):
-        return # Log kirliliğini önlemek için kapalı
+        return  # Log kirliliğini önler
 
 def run_health_check_server():
     port = int(os.environ.get("PORT", 8080))
@@ -144,12 +144,13 @@ async def kayit_plaka_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     plaka = format_plaka(update.message.text)
     context.user_data['plaka'] = plaka
 
+    # Otobüs yoksa otomatik oluştur
     try:
         res = supabase.table("otobusler").select("plaka").eq("plaka", plaka).execute()
         if not res.data:
             supabase.table("otobusler").insert({"plaka": plaka}).execute()
     except Exception as e:
-        logger.error(f"Plaka kontrol/ekleme hatası: {e}")
+        logger.error(f"Plaka ekleme hatası: {e}")
 
     await update.message.reply_text(f"✅ Plaka: {plaka}\n\nYapılan teknik işlemi / tamiri detaylıca yazın:")
     return ISLEM
@@ -220,12 +221,19 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             logger.error(f"Fotoğraf yükleme hatası: {e}")
 
     try:
+        # DB Payload (Eksik veya Null veri çakışmasını engellemek için)
         kayit_payload = {
             "plaka": context.user_data['plaka'],
             "yapilan_islem": context.user_data['islem'],
-            "garanti_bitis": context.user_data.get('garanti'),
-            "foto_url": foto_url
+            "tarih": str(datetime.now().date())
         }
+        
+        if context.user_data.get('garanti'):
+            kayit_payload["garanti_bitis"] = context.user_data['garanti']
+            
+        if foto_url:
+            kayit_payload["foto_url"] = foto_url
+
         supabase.table("servis_kayitlari").insert(kayit_payload).execute()
         
         keyboard = [[KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))]]
@@ -233,8 +241,8 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
         await update.message.reply_text("🎉 Servis kaydı başarıyla eklendi!", reply_markup=reply_markup)
     except Exception as e:
-        logger.error(f"DB Kayıt hatası: {e}")
-        await update.message.reply_text("❌ Servis kaydı oluşturulurken bir hata oluştu.")
+        logger.error(f"DB Kayıt hatası detay: {e}")
+        await update.message.reply_text(f"❌ Servis kaydı oluşturulurken hata oluştu: {e}")
 
     context.user_data.clear()
     return ConversationHandler.END
@@ -249,7 +257,6 @@ async def kayit_iptal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 # --- MAIN ---
 
 def main():
-    # Arka planda Render Port sunucusunu başlat
     Thread(target=run_health_check_server, daemon=True).start()
 
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
