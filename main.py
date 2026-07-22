@@ -257,6 +257,7 @@ async def kayit_iptal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 # --- MAIN ---
 
 def main():
+    # Render Timeout Engelleyici Sunucuyu Arka Planda Başlat
     Thread(target=run_health_check_server, daemon=True).start()
 
     app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
@@ -283,7 +284,9 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, plaka_sorgula))
 
     logger.info("Bot ve Sunucu başlatılıyor...")
-    app.run_polling(drop_pending_updates=True)
+    
+    # Eskide kalan takılmış mesajları silerek temiz başlangıç yap
+    app.run_polling(drop_pending_updates=True, poll_interval=1.0)
 
 
 if __name__ == "__main__":
