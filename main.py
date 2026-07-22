@@ -195,13 +195,13 @@ async def otobus_detay_goster(message_or_query, plaka: str):
         if servis_res.data:
             msg += f"🛠 SON SERVİS KAYITLARI:\n\n"
             for kayit in servis_res.data:
-                msg += f"📅 Tarih: {format_date_for_display(kayit['tarih'])}\n"
+                msg += f"📅 Tarih: {format_date_for_display(str(kayit['tarih']))}\n"
                 msg += f"🔧 İşlem: {kayit['yapilan_islem']}\n"
                 if kayit.get('ucret'):
                     msg += f"💰 Ücret: {kayit['ucret']}\n"
                 if kayit.get('sofor_bilgi'):
                     msg += f"👤 Şoför / İletişim: {kayit['sofor_bilgi']}\n"
-                garanti_display = format_date_for_display(kayit.get('garanti_bitis')) or 'Yok'
+                garanti_display = format_date_for_display(str(kayit.get('garanti_bitis') or '')) or 'Yok'
                 msg += f"🛡 Garanti Bitiş: {garanti_display}\n"
                 if kayit.get('foto_url'):
                     msg += f"🖼 Servis Fotoğrafı: {kayit['foto_url']}\n"
@@ -352,7 +352,6 @@ async def kayit_garanti_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         context.user_data['garanti'] = None
     else:
         parsed_date = None
-        # Kullanıcının girebileceği olası formatlar
         for fmt in ("%d.%m.%Y", "%d/%m/%Y", "%Y-%m-%d"):
             try:
                 parsed_date = datetime.strptime(text, fmt).date()
@@ -361,7 +360,7 @@ async def kayit_garanti_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 continue
 
         if parsed_date:
-            # DB için YYYY-MM-DD formatında saklıyoruz
+            # DB için ISO standartı (YYYY-MM-DD) saklıyoruz
             context.user_data['garanti'] = str(parsed_date)
         else:
             await update.message.reply_text("⚠️ Geçersiz tarih formatı! Lütfen GG.AA.YYYY şeklinde girin (Örn: 31.12.2026) veya 'Pas' yazın:")
@@ -436,7 +435,7 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             logger.error(f"Fotoğraf yükleme hatası: {e}")
 
     try:
-        # DB için bugünün tarihini YYYY-MM-DD olarak oluşturuyoruz
+        # DB için ISO standartı (YYYY-MM-DD) kullanıyoruz
         bugun_db = datetime.now().strftime("%Y-%m-%d")
 
         kayit_payload = {
