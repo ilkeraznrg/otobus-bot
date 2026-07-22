@@ -25,16 +25,16 @@
     <div id="records-list"></div>
 
     <script>
-        // --- BURAYA SUPABASE BİLGİLERİNİZİ GİRİN ---
+        // Supabase Bağlantı Bilgileri
         const SUPABASE_URL = "https://haqxyfhdfulvutqinuhc.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhcXh5ZmhkZnVsdnV0cWludWhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2Mzk0MzMsImV4cCI6MjEwMDIxNTQzM30.g3L_pR9Y9dm2uajA0mFT3nveEI8pxEQbWcZ46Q6rAos"; 
-        // ------------------------------------------
 
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // Degisken ismini 'supabaseClient' yaparak çakışmayı önledik
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         async function loadRecords() {
             try {
-                const { data, error } = await supabase
+                const { data, error } = await supabaseClient
                     .from('servis_kayitlari')
                     .select('*')
                     .order('created_at', { ascending: false });
@@ -74,7 +74,9 @@
             }
         }
 
-        window.Telegram.WebApp.ready();
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+        }
         loadRecords();
     </script>
 </body>
