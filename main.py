@@ -57,6 +57,20 @@ PLAKA, ISLEM, GARANTI, UCRET, SOFOR, FOTO = range(6)
 def format_plaka(plaka: str) -> str:
     return re.sub(r"\s+", " ", plaka.strip().upper())
 
+def format_date_for_display(date_str: str) -> str:
+    """YYYY-MM-DD formatındaki tarihi GG.AA.YYYY yapar."""
+    if not date_str:
+        return ""
+    if "." in date_str:
+        return date_str
+    try:
+        parts = date_str.split("-")
+        if len(parts) == 3:
+            return f"{parts[2]}.{parts[1]}.{parts[0]}"
+    except Exception:
+        pass
+    return date_str
+
 def kullanici_yetkili_mi(telegram_id: int) -> bool:
     try:
         res = supabase.table("yetkili_kullanicilar").select("id").eq("telegram_id", telegram_id).execute()
@@ -69,8 +83,8 @@ def kullanici_yetkili_mi(telegram_id: int) -> bool:
 # --- BOT AÇILIŞINDA TELEGRAM MENÜSÜNE KOMUTLARI EKLEME ---
 async def post_init(application: Application) -> None:
     commands = [
-        BotCommand("start", "Botu Başlat"),
-        BotCommand("giris", "Kullanıcı Adı ve Şifre ile Giriş Yap"),
+        BotCommand("start", "Botu Başlat ve Menüyü Gör"),
+        BotCommand("giris", "Usta Girişi Yap"),
         BotCommand("cikis", "Oturumu Kapat"),
         BotCommand("yeni_kayit", "Yeni Servis Kaydı Oluştur"),
         BotCommand("iptal", "Devam Eden İşlemi İptal Et")
@@ -85,12 +99,12 @@ async def giris_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     telegram_id = update.effective_user.id
     
     if kullanici_yetkili_mi(telegram_id):
-        await update.message.reply_text("✅ Zaten giriş yapmış durumdasınız. Sistemi direkt kullanabilirsiniz.")
+        await update.message.reply_text("✅ Zaten giriş yapmış durumdasınız. Kayıt oluşturabilirsiniz.")
         return
 
     if len(context.args) < 2:
         await update.message.reply_text(
-            "🔒 **Giriş Yapmak İçin:**\n"
+            "🔒 **Usta / Yetkili Girişi:**\n"
             "Lütfen komutu şu şekilde yazın:\n"
             "`/giris kullanici_adi sifre`\n\n"
             "Örnek: `/giris hasan hasan46.`",
@@ -116,7 +130,7 @@ async def giris_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             await update.message.reply_text(
                 f"🎉 Hoş geldiniz **{user_rec.get('ad_soyad') or k_adi}**!\n"
-                f"Giriş başarılı. Artık servis kaydı ekleyebilir ve sorgulama yapabilirsiniz.",
+                f"Giriş başarılı. Artık servis kaydı ekleyebilirsiniz.",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
@@ -131,7 +145,7 @@ async def cikis_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     telegram_id = update.effective_user.id
     try:
         supabase.table("yetkili_kullanicilar").update({"telegram_id": None}).eq("telegram_id", telegram_id).execute()
-        await update.message.reply_text("🔒 Oturumunuz kapatıldı. Tekrar işlem yapmak için `/giris` yapmalısınız.")
+        await update.message.reply_text("🔒 Oturumunuz kapatıldı. Artık sadece sorgulama yapabilirsiniz.")
     except Exception as e:
         logger.error(f"Çıkış hatası: {e}")
 
@@ -139,17 +153,6 @@ async def cikis_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # --- KOMUT VE GENEL MESAJ HANDLERLARI ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    telegram_id = update.effective_user.id
-    
-    if not kullanici_yetkili_mi(telegram_id):
-        await update.message.reply_text(
-            "🔒 **Sisteme Giriş Yapmanız Gerekiyor**\n\n"
-            "İşlem yapabilmek için lütfen kullanıcı adı ve şifrenizi girin:\n"
-            "`/giris kullanici_adi sifre`",
-            parse_mode="Markdown"
-        )
-        return
-
     keyboard = [
         [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
         [KeyboardButton(text="➕ Yeni Servis Kaydı")]
@@ -160,8 +163,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"Merhaba {update.effective_user.first_name}! 🚌\n\n"
         f"Belediye Otobüs Teknik Takip Botuna hoş geldiniz.\n\n"
         f"• Tam plaka (`46 H 0123`) veya kısmi numara (`0123`) yazarak son servis kayıtlarını sorgulayabilirsiniz.\n"
-        f"• Yeni servis kaydı açmak için /yeni_kayit yazabilir veya **'➕ Yeni Servis Kaydı'** butonuna basabilirsiniz.\n"
-        f"• Tüm geçmiş servis kayıtlarını ve fotoğrafları görmek için **'📱 Servis Panelini Aç'** butonunu kullanabilirsiniz."
+        f"• Tüm geçmiş servis kayıtlarını ve fotoğrafları görmek için **'📱 Servis Panelini Aç'** butonunu kullanabilirsiniz.\n"
+        f"• Ustalar yeni servis kaydı eklemek için `/giris` yapabilir."
     )
     
     await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
@@ -192,13 +195,14 @@ async def otobus_detay_goster(message_or_query, plaka: str):
         if servis_res.data:
             msg += f"🛠 SON SERVİS KAYITLARI:\n\n"
             for kayit in servis_res.data:
-                msg += f"📅 Tarih: {kayit['tarih']}\n"
+                msg += f"📅 Tarih: {format_date_for_display(kayit['tarih'])}\n"
                 msg += f"🔧 İşlem: {kayit['yapilan_islem']}\n"
                 if kayit.get('ucret'):
                     msg += f"💰 Ücret: {kayit['ucret']}\n"
                 if kayit.get('sofor_bilgi'):
                     msg += f"👤 Şoför / İletişim: {kayit['sofor_bilgi']}\n"
-                msg += f"🛡 Garanti Bitiş: {kayit.get('garanti_bitis') or 'Yok'}\n"
+                garanti_display = format_date_for_display(kayit.get('garanti_bitis')) or 'Yok'
+                msg += f"🛡 Garanti Bitiş: {garanti_display}\n"
                 if kayit.get('foto_url'):
                     msg += f"🖼 Servis Fotoğrafı: {kayit['foto_url']}\n"
                 msg += f"---------------------\n"
@@ -211,12 +215,6 @@ async def otobus_detay_goster(message_or_query, plaka: str):
 
 
 async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    telegram_id = update.effective_user.id
-    
-    if not kullanici_yetkili_mi(telegram_id):
-        await update.message.reply_text("🔒 Lütfen önce giriş yapın: `/giris kullanici_adi sifre`", parse_mode="Markdown")
-        return
-
     raw_text = update.message.text.strip()
 
     if raw_text in ["📱 Servis Panelini Aç", "➕ Yeni Servis Kaydı"]:
@@ -264,8 +262,8 @@ async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TY
     rehber_mesaj = (
         "🤖 **Nasıl Yardımcı Olabilirim?**\n\n"
         "🔍 **Eski Kayıt Sorgulama:** Tam plaka (`46 H 0123`) veya kısmi numara (`0123`) yazabilirsiniz.\n\n"
-        "📝 **Yeni Kayıt Ekleme:** `/yeni_kayit` yazın veya aşağıdaki **'➕ Yeni Servis Kaydı'** butonuna basın.\n\n"
-        "🌐 **Tüm Liste & Web Panel:** Tüm geçmiş servis verilerini görmek için **'📱 Servis Panelini Aç'** butonunu kullanın."
+        "🌐 **Tüm Liste & Web Panel:** Geçmiş tüm verileri görmek için **'📱 Servis Panelini Aç'** butonunu kullanın.\n\n"
+        "📝 **Yeni Kayıt Ekleme:** Ustaların kayıt ekleyebilmesi için önce `/giris kullanici_adi sifre` yapması gerekir."
     )
 
     await update.message.reply_text(rehber_mesaj, reply_markup=reply_markup, parse_mode="Markdown")
@@ -274,10 +272,6 @@ async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TY
 async def plaka_buton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    
-    if not kullanici_yetkili_mi(query.from_user.id):
-        await query.message.reply_text("🔒 Bu işlemi yapmak için giriş yapmalısınız.")
-        return
 
     data = query.data
     if data.startswith("plaka_sec_"):
@@ -289,7 +283,13 @@ async def plaka_buton_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def kayit_baslat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not kullanici_yetkili_mi(update.effective_user.id):
-        await update.message.reply_text("🔒 Yeni servis kaydı açabilmek için lütfen giriş yapın: `/giris kullanici_adi sifre`", parse_mode="Markdown")
+        await update.message.reply_text(
+            "🔒 **Yetkisiz İşlem!**\n\n"
+            "Yeni servis kaydı oluşturabilmek için usta girişi yapmalısınız:\n"
+            "`/giris kullanici_adi sifre`\n\n"
+            "*(Örn: `/giris hasan hasan46.`)*", 
+            parse_mode="Markdown"
+        )
         return ConversationHandler.END
 
     context.user_data.clear()
@@ -351,8 +351,8 @@ async def kayit_garanti_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if text.lower() == "pas":
         context.user_data['garanti'] = None
     else:
-        # GG.AA.YYYY veya YYYY-AA-GG formatlarının ikisini de destekle
         parsed_date = None
+        # Kullanıcının girebileceği olası formatlar
         for fmt in ("%d.%m.%Y", "%d/%m/%Y", "%Y-%m-%d"):
             try:
                 parsed_date = datetime.strptime(text, fmt).date()
@@ -361,7 +361,8 @@ async def kayit_garanti_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 continue
 
         if parsed_date:
-            context.user_data['garanti'] = parsed_date.strftime("%d.%m.%Y")
+            # DB için YYYY-MM-DD formatında saklıyoruz
+            context.user_data['garanti'] = str(parsed_date)
         else:
             await update.message.reply_text("⚠️ Geçersiz tarih formatı! Lütfen GG.AA.YYYY şeklinde girin (Örn: 31.12.2026) veya 'Pas' yazın:")
             return GARANTI
@@ -435,13 +436,13 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             logger.error(f"Fotoğraf yükleme hatası: {e}")
 
     try:
-        # Bugünün tarihini GG.AA.YYYY formatında oluşturuyoruz
-        bugun = datetime.now().strftime("%d.%m.%Y")
+        # DB için bugünün tarihini YYYY-MM-DD olarak oluşturuyoruz
+        bugun_db = datetime.now().strftime("%Y-%m-%d")
 
         kayit_payload = {
             "plaka": context.user_data['plaka'],
             "yapilan_islem": context.user_data['islem'],
-            "tarih": bugun
+            "tarih": bugun_db
         }
         
         if context.user_data.get('garanti'):
