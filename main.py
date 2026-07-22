@@ -338,7 +338,7 @@ async def kayit_islem_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data['islem'] = update.message.text
     await update.message.reply_text(
         "Garanti bitiş tarihi var mı?\n"
-        "Varsa YYYY-AA-GG formatında yazın (Örn: 2026-12-31).\n"
+        "Varsa GG.AA.YYYY formatında yazın (Örn: 31.12.2026).\n"
         "Yoksa Pas yazın veya aşağıdaki butona basın.",
         reply_markup=ReplyKeyboardMarkup([["Pas"]], resize_keyboard=True, one_time_keyboard=True)
     )
@@ -351,11 +351,19 @@ async def kayit_garanti_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if text.lower() == "pas":
         context.user_data['garanti'] = None
     else:
-        try:
-            valid_date = datetime.strptime(text, "%Y-%m-%d").date()
-            context.user_data['garanti'] = str(valid_date)
-        except ValueError:
-            await update.message.reply_text("⚠️ Geçersiz tarih formatı! Lütfen YYYY-AA-GG şeklinde girin veya 'Pas' yazın:")
+        # GG.AA.YYYY veya YYYY-AA-GG formatlarının ikisini de destekle
+        parsed_date = None
+        for fmt in ("%d.%m.%Y", "%d/%m/%Y", "%Y-%m-%d"):
+            try:
+                parsed_date = datetime.strptime(text, fmt).date()
+                break
+            except ValueError:
+                continue
+
+        if parsed_date:
+            context.user_data['garanti'] = parsed_date.strftime("%d.%m.%Y")
+        else:
+            await update.message.reply_text("⚠️ Geçersiz tarih formatı! Lütfen GG.AA.YYYY şeklinde girin (Örn: 31.12.2026) veya 'Pas' yazın:")
             return GARANTI
 
     await update.message.reply_text(
@@ -427,10 +435,13 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             logger.error(f"Fotoğraf yükleme hatası: {e}")
 
     try:
+        # Bugünün tarihini GG.AA.YYYY formatında oluşturuyoruz
+        bugun = datetime.now().strftime("%d.%m.%Y")
+
         kayit_payload = {
             "plaka": context.user_data['plaka'],
             "yapilan_islem": context.user_data['islem'],
-            "tarih": str(datetime.now().date())
+            "tarih": bugun
         }
         
         if context.user_data.get('garanti'):
