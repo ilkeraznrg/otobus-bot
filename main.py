@@ -5,7 +5,7 @@ import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from datetime import datetime
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -23,7 +23,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- RENDER TIMEOUT ENGELLEYİCİ (HEALTH CHECK SERVER) ---
+# --- RENDER HEALTH CHECK SERVER ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -31,24 +31,32 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"Bot 7/24 Aktif!")
 
     def log_message(self, format, *args):
-        return  # Log kirliliğini önler
+        return
 
 def run_health_check_server():
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
     logger.info(f"Render Portu Dinleniyor: {port}")
     server.serve_forever()
-# --------------------------------------------------
+# ----------------------------------
 
-# Supabase İstemcisi
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
-# Conversation Handler Durumları
 PLAKA, ISLEM, GARANTI, FOTO = range(4)
-
 
 def format_plaka(plaka: str) -> str:
     return re.sub(r"\s+", " ", plaka.strip().upper())
+
+
+# --- BOT AÇILIŞINDA TELEGRAM MENÜSÜNE KOMUTLARI EKLEME ---
+async def post_init(application: Application) -> None:
+    commands = [
+        BotCommand("start", "Botu Başlat ve Menüyü Aç"),
+        BotCommand("yeni_kayit", "Yeni Servis Kaydı Oluştur"),
+        BotCommand("iptal", "Devam Eden İşlemi İptal Et")
+    ]
+    await application.bot.set_my_commands(commands)
+    logger.info("Bot komut menüsü Telegram'a kaydedildi.")
 
 
 # --- KOMUT HANDLERLARI ---
@@ -56,8 +64,10 @@ def format_plaka(plaka: str) -> str:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     
+    # Alt Sabit Menü Butonları
     keyboard = [
-        [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))]
+        [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
+        [KeyboardButton(text="➕ Yeni Servis Kaydı")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -65,8 +75,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"Merhaba {user.first_name}! 🚌\n\n"
         f"Belediye Otobüs Teknik Takip Botuna hoş geldiniz.\n\n"
         f"• Doğrudan bir plaka yazarak (Örn: 46 H 0123) son servis kayıtlarını sorgulayabilirsiniz.\n"
-        f"• Yeni servis kaydı açmak için bir fotoğraf atabilir veya /yeni_kayit komutunu kullanabilirsiniz.\n"
-        f"• Alt menüden Web Paneline erişebilirsiniz."
+        f"• Yeni servis kaydı açmak için /yeni_kayit komutunu yazabilir veya **'➕ Yeni Servis Kaydı'** butonuna basabilirsiniz.\n"
+        f"• Tüm geçmiş servis kayıtlarını ve fotoğrafları görmek için **'📱 Servis Panelini Aç'** butonunu kullanabilirsiniz."
     )
     
     await update.message.reply_text(welcome_text, reply_markup=reply_markup)
@@ -78,6 +88,9 @@ async def plaka_sorgula(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if raw_text == "📱 Servis Panelini Aç":
         return
 
+    if raw_text == "➕ Yeni Servis Kaydı":
+        return await kayit_baslat(update, context)
+
     plaka = format_plaka(raw_text)
 
     try:
@@ -85,9 +98,7 @@ async def plaka_sorgula(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         
         if not otobus_res.data:
             text = f"⚠️ {plaka} plakalı otobüs sistemde bulunamadı."
-            keyboard = [[InlineKeyboardButton("➕ Bu Plakayı Kaydet", callback_data=f"add_{plaka}")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(text, reply_markup=reply_markup)
+            await update.message.reply_text(text)
             return
 
         otobus = otobus_res.data[0]
@@ -97,7 +108,7 @@ async def plaka_sorgula(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             .select("*")
             .eq("plaka", plaka)
             .order("created_at", desc=True)
-            .limit(3)
+            .limit(5)
             .execute()
         )
 
@@ -144,13 +155,12 @@ async def kayit_plaka_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     plaka = format_plaka(update.message.text)
     context.user_data['plaka'] = plaka
 
-    # Otobüs yoksa otomatik oluştur
     try:
         res = supabase.table("otobusler").select("plaka").eq("plaka", plaka).execute()
         if not res.data:
             supabase.table("otobusler").insert({"plaka": plaka}).execute()
     except Exception as e:
-        logger.error(f"Plaka ekleme hatası: {e}")
+        logger.error(f"Plaka kontrol/ekleme hatası: {e}")
 
     await update.message.reply_text(f"✅ Plaka: {plaka}\n\nYapılan teknik işlemi / tamiri detaylıca yazın:")
     return ISLEM
@@ -160,7 +170,7 @@ async def kayit_islem_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data['islem'] = update.message.text
     await update.message.reply_text(
         "Garanti bitiş tarihi var mı?\n"
-        "Varsa YYYY-AA-GG formatında yazın (Örn: 2025-12-31).\n"
+        "Varsa YYYY-AA-GG formatında yazın (Örn: 2026-12-31).\n"
         "Yoksa Pas yazın veya aşağıdaki butona basın.",
         reply_markup=ReplyKeyboardMarkup([["Pas"]], resize_keyboard=True, one_time_keyboard=True)
     )
@@ -221,7 +231,6 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             logger.error(f"Fotoğraf yükleme hatası: {e}")
 
     try:
-        # DB Payload (Eksik veya Null veri çakışmasını engellemek için)
         kayit_payload = {
             "plaka": context.user_data['plaka'],
             "yapilan_islem": context.user_data['islem'],
@@ -236,12 +245,15 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
         supabase.table("servis_kayitlari").insert(kayit_payload).execute()
         
-        keyboard = [[KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))]]
+        keyboard = [
+            [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
+            [KeyboardButton(text="➕ Yeni Servis Kaydı")]
+        ]
         reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
         await update.message.reply_text("🎉 Servis kaydı başarıyla eklendi!", reply_markup=reply_markup)
     except Exception as e:
-        logger.error(f"DB Kayıt hatası detay: {e}")
+        logger.error(f"DB Kayıt hatası: {e}")
         await update.message.reply_text(f"❌ Servis kaydı oluşturulurken hata oluştu: {e}")
 
     context.user_data.clear()
@@ -250,21 +262,26 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 async def kayit_iptal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
-    await update.message.reply_text("❌ İşlem iptal edildi.")
+    keyboard = [
+        [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
+        [KeyboardButton(text="➕ Yeni Servis Kaydı")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text("❌ İşlem iptal edildi.", reply_markup=reply_markup)
     return ConversationHandler.END
 
 
 # --- MAIN ---
 
 def main():
-    # Render Timeout Engelleyici Sunucuyu Arka Planda Başlat
     Thread(target=run_health_check_server, daemon=True).start()
 
-    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).post_init(post_init).build()
 
     kayit_handler = ConversationHandler(
         entry_points=[
             CommandHandler("yeni_kayit", kayit_baslat),
+            MessageHandler(filters.Regex("^➕ Yeni Servis Kaydı$"), kayit_baslat),
             MessageHandler(filters.PHOTO, kayit_baslat)
         ],
         states={
@@ -284,8 +301,6 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, plaka_sorgula))
 
     logger.info("Bot ve Sunucu başlatılıyor...")
-    
-    # Eskide kalan takılmış mesajları silerek temiz başlangıç yap
     app.run_polling(drop_pending_updates=True, poll_interval=1.0)
 
 
