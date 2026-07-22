@@ -107,7 +107,6 @@
         }
         .loader { text-align: center; padding: 20px; color: var(--text-muted); }
 
-        /* MODAL (Giriş Penceresi) STİLLERİ */
         .modal {
             display: none;
             position: fixed;
@@ -190,6 +189,24 @@
         let allRecords = [];
         let isLoggedIn = false;
 
+        // OTOMATİK ZAMAN AŞIMI (TIMEOUT) AYARLARI
+        const INACTIVITY_LIMIT = 15 * 60 * 1000; // 15 Dakika (milisaniye cinsinden)
+        let inactivityTimer;
+
+        function resetInactivityTimer() {
+            clearTimeout(inactivityTimer);
+            if (isLoggedIn) {
+                inactivityTimer = setTimeout(() => {
+                    logoutUser("Uzun süre işlem yapılmadığı için oturumunuz kapatıldı.");
+                }, INACTIVITY_LIMIT);
+            }
+        }
+
+        // Kullanıcı hareketlerini dinle (dokunma, kaydırma, tuşa basma)
+        ['touchstart', 'mousemove', 'keydown', 'scroll', 'click'].forEach(evt => {
+            document.addEventListener(evt, resetInactivityTimer, true);
+        });
+
         function formatDate(dateStr) {
             if (!dateStr) return '';
             if (dateStr.includes('.')) return dateStr;
@@ -198,25 +215,33 @@
             return dateStr;
         }
 
-        // Oturum durumunu kontrol et
         function checkSession() {
             const savedUser = localStorage.getItem('panel_user');
             if (savedUser) {
                 isLoggedIn = true;
                 document.getElementById('auth-btn').innerText = '🚪 Çıkış Yap';
                 document.getElementById('auth-btn').classList.add('logout');
+                resetInactivityTimer();
             } else {
                 isLoggedIn = false;
                 document.getElementById('auth-btn').innerText = '🔑 Usta Girişi';
                 document.getElementById('auth-btn').classList.remove('logout');
+                clearTimeout(inactivityTimer);
+            }
+        }
+
+        function logoutUser(message = null) {
+            localStorage.removeItem('panel_user');
+            checkSession();
+            renderList(allRecords);
+            if (message) {
+                alert(message);
             }
         }
 
         function handleAuthClick() {
             if (isLoggedIn) {
-                localStorage.removeItem('panel_user');
-                checkSession();
-                renderList(allRecords);
+                logoutUser();
             } else {
                 document.getElementById('login-modal').style.display = 'flex';
                 document.getElementById('login-error').style.display = 'none';
@@ -229,7 +254,7 @@
 
         async function loginUser() {
             const kAdi = document.getElementById('login-username').value.trim();
-            const sifre = document.getElementById('login-password').value.strip ? document.getElementById('login-password').value.strip() : document.getElementById('login-password').value;
+            const sifre = document.getElementById('login-password').value.trim();
 
             const { data, error } = await supabaseClient
                 .from('yetkili_kullanicilar')
@@ -295,7 +320,6 @@
                     </div>
                     <div class="islem">🔧 ${item.yapilan_islem}</div>
                     
-                    ${/* SADECE GİRİŞ YAPILDIYSA ÜCRETİ GÖSTER */ ''}
                     ${(isLoggedIn && item.ucret) ? `<div class="meta-info ucret-box">💰 Ücret: ${item.ucret}</div>` : ''}
                     
                     ${item.sofor_bilgi ? `<div class="meta-info">👤 Şoför: ${item.sofor_bilgi}</div>` : ''}
