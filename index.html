@@ -7,30 +7,119 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f8; margin: 0; padding: 15px; color: #333; }
-        h2 { margin-top: 0; color: #1a252f; text-align: center; }
-        .card { background: #fff; border-radius: 10px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .plaka { font-weight: bold; font-size: 1.1em; color: #0088cc; }
-        .tarih { font-size: 0.85em; color: #7f8c8d; float: right; }
-        .islem { margin: 8px 0; font-size: 0.95em; }
-        .garanti { font-size: 0.85em; color: #27ae60; font-weight: 500; }
-        .img-link { display: inline-block; margin-top: 5px; color: #3498db; text-decoration: none; font-size: 0.85em; }
-        .loader { text-align: center; padding: 20px; color: #7f8c8d; }
+        :root {
+            --primary: #0088cc;
+            --bg: #f4f6f8;
+            --card-bg: #ffffff;
+            --text: #2c3e50;
+            --text-muted: #7f8c8d;
+            --success: #27ae60;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 12px;
+            color: var(--text);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .header h2 { margin: 0 0 5px 0; font-size: 1.4em; }
+        .stats-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .stat-card {
+            flex: 1;
+            background: var(--card-bg);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .stat-val { font-size: 1.2em; font-weight: bold; color: var(--primary); }
+        .stat-lbl { font-size: 0.75em; color: var(--text-muted); }
+        
+        .search-box {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.95em;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+            outline: none;
+        }
+        .search-box:focus { border-color: var(--primary); }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border-left: 4px solid var(--primary);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .plaka { font-weight: bold; font-size: 1.1em; color: var(--primary); }
+        .tarih { font-size: 0.8em; color: var(--text-muted); }
+        .islem { font-size: 0.95em; margin: 6px 0; line-height: 1.4; }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: 600;
+        }
+        .badge-garanti { background: #e8f8f5; color: var(--success); }
+        
+        .img-thumb {
+            width: 100%;
+            max-height: 160px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-top: 8px;
+            cursor: pointer;
+        }
+        .loader { text-align: center; padding: 20px; color: var(--text-muted); }
     </style>
 </head>
 <body>
 
-    <h2>🚌 Servis Geçmişi</h2>
+    <div class="header">
+        <h2>🚌 Servis Geçmişi Paneli</h2>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-card">
+            <div class="stat-val" id="total-count">0</div>
+            <div class="stat-lbl">Toplam Kayıt</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val" id="guarantee-count">0</div>
+            <div class="stat-lbl">Garantili Parça</div>
+        </div>
+    </div>
+
+    <input type="text" id="search-input" class="search-box" placeholder="🔍 Plaka veya yapılan işlem ara..." onkeyup="filterRecords()">
+
     <div id="loading" class="loader">Kayıtlar yükleniyor...</div>
     <div id="records-list"></div>
 
     <script>
-        // Supabase Bağlantı Bilgileri
         const SUPABASE_URL = "https://haqxyfhdfulvutqinuhc.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhcXh5ZmhkZnVsdnV0cWludWhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2Mzk0MzMsImV4cCI6MjEwMDIxNTQzM30.g3L_pR9Y9dm2uajA0mFT3nveEI8pxEQbWcZ46Q6rAos"; 
 
-        // Degisken ismini 'supabaseClient' yaparak çakışmayı önledik
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        let allRecords = [];
 
         async function loadRecords() {
             try {
@@ -40,38 +129,59 @@
                     .order('created_at', { ascending: false });
 
                 document.getElementById('loading').style.display = 'none';
-                const container = document.getElementById('records-list');
 
                 if (error) {
-                    console.error("Supabase Hatası:", error);
-                    container.innerHTML = `<div class="card" style="color:red;">Veri çekilemedi: ${error.message}</div>`;
+                    document.getElementById('records-list').innerHTML = `<div class="card" style="border-left-color:red;">Veri çekilemedi: ${error.message}</div>`;
                     return;
                 }
 
-                if (!data || data.length === 0) {
-                    container.innerHTML = '<div class="card" style="text-align:center;">Henüz servis kaydı bulunmuyor.</div>';
-                    return;
-                }
+                allRecords = data || [];
+                
+                // İstatistikleri Güncelle
+                document.getElementById('total-count').innerText = allRecords.length;
+                const guaranteed = allRecords.filter(r => r.garanti_bitis).length;
+                document.getElementById('guarantee-count').innerText = guaranteed;
 
-                data.forEach(item => {
-                    const card = document.createElement('div');
-                    card.className = 'card';
-                    card.innerHTML = `
-                        <div>
-                            <span class="plaka">${item.plaka}</span>
-                            <span class="tarih">${item.tarih || ''}</span>
-                        </div>
-                        <div class="islem">🔧 ${item.yapilan_islem}</div>
-                        ${item.garanti_bitis ? `<div class="garanti">🛡 Garanti Bitiş: ${item.garanti_bitis}</div>` : ''}
-                        ${item.foto_url ? `<a href="${item.foto_url}" target="_blank" class="img-link">🖼 Servis Fotoğrafını Gör</a>` : ''}
-                    `;
-                    container.appendChild(card);
-                });
+                renderList(allRecords);
+
             } catch (err) {
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('records-list').innerHTML = '<div class="card" style="color:red;">Bağlantı hatası oluştu.</div>';
                 console.error(err);
             }
+        }
+
+        function renderList(records) {
+            const container = document.getElementById('records-list');
+            container.innerHTML = '';
+
+            if (records.length === 0) {
+                container.innerHTML = '<div class="card" style="text-align:center;">Kayıt bulunamadı.</div>';
+                return;
+            }
+
+            records.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-header">
+                        <span class="plaka">${item.plaka}</span>
+                        <span class="tarih">📅 ${item.tarih || ''}</span>
+                    </div>
+                    <div class="islem">🔧 ${item.yapilan_islem}</div>
+                    ${item.garanti_bitis ? `<span class="badge badge-garanti">🛡 Garanti: ${item.garanti_bitis}</span>` : ''}
+                    ${item.foto_url ? `<a href="${item.foto_url}" target="_blank"><img src="${item.foto_url}" class="img-thumb" loading="lazy"></a>` : ''}
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function filterRecords() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const filtered = allRecords.filter(r => 
+                (r.plaka && r.plaka.toLowerCase().includes(query)) ||
+                (r.yapilan_islem && r.yapilan_islem.toLowerCase().includes(query))
+            );
+            renderList(filtered);
         }
 
         if (window.Telegram && window.Telegram.WebApp) {
