@@ -5,11 +5,20 @@ import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from datetime import datetime
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+from telegram import (
+    Update, 
+    ReplyKeyboardMarkup, 
+    KeyboardButton, 
+    WebAppInfo, 
+    InlineKeyboardButton, 
+    InlineKeyboardMarkup, 
+    BotCommand
+)
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     ConversationHandler,
     ContextTypes,
     filters,
@@ -21,7 +30,7 @@ import config
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
-logger = logging.getLogger(__name__)
+logger = logger = logging.getLogger(__name__)
 
 # --- RENDER HEALTH CHECK SERVER ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -59,12 +68,11 @@ async def post_init(application: Application) -> None:
     logger.info("Bot komut menüsü Telegram'a kaydedildi.")
 
 
-# --- KOMUT HANDLERLARI ---
+# --- KOMUT VE GENEL MESAJ HANDLERLARI ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     
-    # Alt Sabit Menü Butonları
     keyboard = [
         [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
         [KeyboardButton(text="➕ Yeni Servis Kaydı")]
@@ -74,35 +82,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_text = (
         f"Merhaba {user.first_name}! 🚌\n\n"
         f"Belediye Otobüs Teknik Takip Botuna hoş geldiniz.\n\n"
-        f"• Doğrudan bir plaka yazarak (Örn: 46 H 0123) son servis kayıtlarını sorgulayabilirsiniz.\n"
-        f"• Yeni servis kaydı açmak için /yeni_kayit komutunu yazabilir veya **'➕ Yeni Servis Kaydı'** butonuna basabilirsiniz.\n"
+        f"• Tam plaka (`46 H 0123`) veya kısmi numara (`0123`) yazarak son servis kayıtlarını sorgulayabilirsiniz.\n"
+        f"• Yeni servis kaydı açmak için /yeni_kayit yazabilir veya **'➕ Yeni Servis Kaydı'** butonuna basabilirsiniz.\n"
         f"• Tüm geçmiş servis kayıtlarını ve fotoğrafları görmek için **'📱 Servis Panelini Aç'** butonunu kullanabilirsiniz."
     )
     
-    await update.message.reply_text(welcome_text, reply_markup=reply_markup)
+    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
 
 
-async def plaka_sorgula(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    raw_text = update.message.text
-    
-    if raw_text == "📱 Servis Panelini Aç":
-        return
-
-    if raw_text == "➕ Yeni Servis Kaydı":
-        return await kayit_baslat(update, context)
-
-    plaka = format_plaka(raw_text)
-
+async def otobus_detay_goster(message_or_query, plaka: str):
+    """Bulunan plakanın verilerini Supabase'den çekip mesaj atar."""
     try:
         otobus_res = supabase.table("otobusler").select("*").eq("plaka", plaka).execute()
         
         if not otobus_res.data:
-            text = f"⚠️ {plaka} plakalı otobüs sistemde bulunamadı."
-            await update.message.reply_text(text)
+            await message_or_query.reply_text(f"⚠️ **{plaka}** plakalı otobüs veritabanında bulunamadı.", parse_mode="Markdown")
             return
 
         otobus = otobus_res.data[0]
-        
         servis_res = (
             supabase.table("servis_kayitlari")
             .select("*")
@@ -130,11 +127,78 @@ async def plaka_sorgula(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         else:
             msg += "ℹ️ Bu araca ait henüz bir servis kaydı bulunmuyor."
 
-        await update.message.reply_text(msg)
-
+        await message_or_query.reply_text(msg)
     except Exception as e:
         logger.error(f"Sorgu hatası: {e}")
-        await update.message.reply_text("❌ Sorgulama yapılırken bir hata oluştu.")
+        await message_or_query.reply_text("❌ Sorgulama yapılırken bir hata oluştu.")
+
+
+async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    raw_text = update.message.text.strip()
+
+    if raw_text in ["📱 Servis Panelini Aç", "➕ Yeni Servis Kaydı"]:
+        return
+
+    clean_text = re.sub(r"\s+", "", raw_text.upper())
+
+    # 1. KONTROL: Tam Plaka mı? (Örn: 46 H 0123, 46H0123)
+    plaka_regex = r"^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{2,4})$"
+    match = re.match(plaka_regex, clean_text)
+
+    if match:
+        il, harf, rakam = match.groups()
+        plaka = f"{il} {harf} {rakam}"
+        await otobus_detay_goster(update.message, plaka)
+        return
+
+    # 2. KONTROL: Kısmi Arama mı? (Örn: "0123", "46 H", "12")
+    if len(clean_text) >= 2 and any(char.isdigit() for char in clean_text):
+        try:
+            res = supabase.table("otobusler").select("plaka").ilike("plaka", f"%{clean_text}%").limit(5).execute()
+            
+            if res.data:
+                keyboard = []
+                for item in res.data:
+                    p = item['plaka']
+                    keyboard.append([InlineKeyboardButton(f"🚌 {p}", callback_data=f"plaka_sec_{p}")])
+                
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(
+                    f"🔍 **'{raw_text}'** aramasıyla eşleşen otobüsler bulundu:\nLütfen bir plaka seçin:",
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown"
+                )
+                return
+        except Exception as e:
+            logger.error(f"Kısmi arama hatası: {e}")
+
+    # 3. KONTROL: Geçersiz Metinler İçin Rehber Menü
+    keyboard = [
+        [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
+        [KeyboardButton(text="➕ Yeni Servis Kaydı")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+    rehber_mesaj = (
+        "🤖 **Nasıl Yardımcı Olabilirim?**\n\n"
+        "🔍 **Eski Kayıt Sorgulama:** Tam plaka (`46 H 0123`) veya kısmi numara (`0123`) yazabilirsiniz.\n\n"
+        "📝 **Yeni Kayıt Ekleme:** `/yeni_kayit` yazın veya aşağıdaki **'➕ Yeni Servis Kaydı'** butonuna basın.\n\n"
+        "🌐 **Tüm Liste & Web Panel:** Tüm geçmiş servis verilerini görmek için **'📱 Servis Panelini Aç'** butonunu kullanın.\n\n"
+        "❌ **İşlem İptali:** Devam eden bir kaydı iptal etmek için `/iptal` yazabilirsiniz."
+    )
+
+    await update.message.reply_text(rehber_mesaj, reply_markup=reply_markup, parse_mode="Markdown")
+
+
+async def plaka_buton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Kısmi arama sonucu çıkan butonlara tıklanınca çalışır."""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    if data.startswith("plaka_sec_"):
+        plaka = data.replace("plaka_sec_", "")
+        await otobus_detay_goster(query.message, plaka)
 
 
 # --- SERVİS KAYDI CONVERSATION HANDLER ---
@@ -152,7 +216,18 @@ async def kayit_baslat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 
 async def kayit_plaka_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    plaka = format_plaka(update.message.text)
+    raw_text = update.message.text.strip()
+    clean_text = re.sub(r"\s+", "", raw_text.upper())
+    
+    plaka_regex = r"^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{2,4})$"
+    match = re.match(plaka_regex, clean_text)
+    
+    if match:
+        il, harf, rakam = match.groups()
+        plaka = f"{il} {harf} {rakam}"
+    else:
+        plaka = format_plaka(raw_text)
+
     context.user_data['plaka'] = plaka
 
     try:
@@ -298,7 +373,8 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(kayit_handler)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, plaka_sorgula))
+    app.add_handler(CallbackQueryHandler(plaka_buton_callback))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, genel_mesaj_fonsiyonu))
 
     logger.info("Bot ve Sunucu başlatılıyor...")
     app.run_polling(drop_pending_updates=True, poll_interval=1.0)
