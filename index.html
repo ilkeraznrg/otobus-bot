@@ -14,6 +14,7 @@
             --text: #2c3e50;
             --text-muted: #7f8c8d;
             --success: #27ae60;
+            --danger: #e74c3c;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -22,9 +23,26 @@
             padding: 12px;
             color: var(--text);
         }
-        .header { text-align: center; margin-bottom: 15px; }
-        .header h2 { margin: 0 0 5px 0; font-size: 1.4em; }
+        .header { 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px; 
+        }
+        .header h2 { margin: 0; font-size: 1.2em; }
         
+        .btn-auth {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-auth.logout { background: var(--danger); }
+
         .stats-bar { display: flex; gap: 10px; margin-bottom: 15px; }
         .stat-card {
             flex: 1;
@@ -67,6 +85,7 @@
         .tarih { font-size: 0.8em; color: var(--text-muted); }
         .islem { font-size: 0.95em; margin: 6px 0; line-height: 1.4; }
         .meta-info { font-size: 0.85em; color: #555; margin-top: 4px; }
+        .ucret-box { color: #d35400; font-weight: bold; }
         
         .badge {
             display: inline-block;
@@ -87,12 +106,52 @@
             cursor: pointer;
         }
         .loader { text-align: center; padding: 20px; color: var(--text-muted); }
+
+        /* MODAL (Giriş Penceresi) STİLLERİ */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            width: 85%;
+            max-width: 320px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        .modal-content h3 { margin-top: 0; margin-bottom: 12px; }
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        .modal-content button {
+            width: 100%;
+            padding: 10px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .error-msg { color: var(--danger); font-size: 0.8em; margin-top: 5px; display: none; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h2>🚌 Servis Geçmişi Paneli</h2>
+        <h2>🚌 Servis Geçmişi</h2>
+        <button id="auth-btn" class="btn-auth" onclick="handleAuthClick()">🔑 Usta Girişi</button>
     </div>
 
     <div class="stats-bar">
@@ -111,12 +170,82 @@
     <div id="loading" class="loader">Kayıtlar yükleniyor...</div>
     <div id="records-list"></div>
 
+    <!-- GİRİŞ MODAL PENCERESİ -->
+    <div id="login-modal" class="modal">
+        <div class="modal-content">
+            <h3>🔐 Yetkili Usta Girişi</h3>
+            <input type="text" id="login-username" placeholder="Kullanıcı Adı">
+            <input type="password" id="login-password" placeholder="Şifre">
+            <button onclick="loginUser()">Giriş Yap</button>
+            <button onclick="closeModal()" style="background:#ccc; margin-top:5px; color:#333;">İptal</button>
+            <div id="login-error" class="error-msg">Hatalı kullanıcı adı veya şifre!</div>
+        </div>
+    </div>
+
     <script>
         const SUPABASE_URL = "https://haqxyfhdfulvutqinuhc.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhcXh5ZmhkZnVsdnV0cWludWhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2Mzk0MzMsImV4cCI6MjEwMDIxNTQzM30.g3L_pR9Y9dm2uajA0mFT3nveEI8pxEQbWcZ46Q6rAos"; 
 
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         let allRecords = [];
+        let isLoggedIn = false;
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            if (dateStr.includes('.')) return dateStr;
+            const parts = dateStr.split('-');
+            if (parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`;
+            return dateStr;
+        }
+
+        // Oturum durumunu kontrol et
+        function checkSession() {
+            const savedUser = localStorage.getItem('panel_user');
+            if (savedUser) {
+                isLoggedIn = true;
+                document.getElementById('auth-btn').innerText = '🚪 Çıkış Yap';
+                document.getElementById('auth-btn').classList.add('logout');
+            } else {
+                isLoggedIn = false;
+                document.getElementById('auth-btn').innerText = '🔑 Usta Girişi';
+                document.getElementById('auth-btn').classList.remove('logout');
+            }
+        }
+
+        function handleAuthClick() {
+            if (isLoggedIn) {
+                localStorage.removeItem('panel_user');
+                checkSession();
+                renderList(allRecords);
+            } else {
+                document.getElementById('login-modal').style.display = 'flex';
+                document.getElementById('login-error').style.display = 'none';
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('login-modal').style.display = 'none';
+        }
+
+        async function loginUser() {
+            const kAdi = document.getElementById('login-username').value.trim();
+            const sifre = document.getElementById('login-password').value.strip ? document.getElementById('login-password').value.strip() : document.getElementById('login-password').value;
+
+            const { data, error } = await supabaseClient
+                .from('yetkili_kullanicilar')
+                .select('*')
+                .eq('kullanici_adi', kAdi)
+                .eq('sifre', sifre);
+
+            if (data && data.length > 0) {
+                localStorage.setItem('panel_user', kAdi);
+                closeModal();
+                checkSession();
+                renderList(allRecords);
+            } else {
+                document.getElementById('login-error').style.display = 'block';
+            }
+        }
 
         async function loadRecords() {
             try {
@@ -138,6 +267,7 @@
                 const guaranteed = allRecords.filter(r => r.garanti_bitis).length;
                 document.getElementById('guarantee-count').innerText = guaranteed;
 
+                checkSession();
                 renderList(allRecords);
 
             } catch (err) {
@@ -161,12 +291,15 @@
                 card.innerHTML = `
                     <div class="card-header">
                         <span class="plaka">${item.plaka}</span>
-                        <span class="tarih">📅 ${item.tarih || ''}</span>
+                        <span class="tarih">📅 ${formatDate(item.tarih)}</span>
                     </div>
                     <div class="islem">🔧 ${item.yapilan_islem}</div>
-                    ${item.ucret ? `<div class="meta-info">💰 **Ücret:** ${item.ucret}</div>` : ''}
-                    ${item.sofor_bilgi ? `<div class="meta-info">👤 **Şoför:** ${item.sofor_bilgi}</div>` : ''}
-                    ${item.garanti_bitis ? `<span class="badge badge-garanti">🛡 Garanti: ${item.garanti_bitis}</span>` : ''}
+                    
+                    ${/* SADECE GİRİŞ YAPILDIYSA ÜCRETİ GÖSTER */ ''}
+                    ${(isLoggedIn && item.ucret) ? `<div class="meta-info ucret-box">💰 Ücret: ${item.ucret}</div>` : ''}
+                    
+                    ${item.sofor_bilgi ? `<div class="meta-info">👤 Şoför: ${item.sofor_bilgi}</div>` : ''}
+                    ${item.garanti_bitis ? `<span class="badge badge-garanti">🛡 Garanti: ${formatDate(item.garanti_bitis)}</span>` : ''}
                     ${item.foto_url ? `<a href="${item.foto_url}" target="_blank"><img src="${item.foto_url}" class="img-thumb" loading="lazy"></a>` : ''}
                 `;
                 container.appendChild(card);
