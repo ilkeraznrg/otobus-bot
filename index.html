@@ -25,9 +25,11 @@
     <div id="records-list"></div>
 
     <script>
-        // Supabase Bağlantısı (Supabase Bilgilerinizi Buraya Girin)
+        // --- BURAYA SUPABASE BİLGİLERİNİZİ GİRİN ---
         const SUPABASE_URL = "https://haqxyfhdfulvutqinuhc.supabase.co";
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhcXh5ZmhkZnVsdnV0cWludWhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2Mzk0MzMsImV4cCI6MjEwMDIxNTQzM30.g3L_pR9Y9dm2uajA0mFT3nveEI8pxEQbWcZ46Q6rAos"; 
+        // ------------------------------------------
+
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         async function loadRecords() {
@@ -40,7 +42,11 @@
                 document.getElementById('loading').style.display = 'none';
                 const container = document.getElementById('records-list');
 
-                if (error) throw error;
+                if (error) {
+                    console.error("Supabase Hatası:", error);
+                    container.innerHTML = `<div class="card" style="color:red;">Veri çekilemedi: ${error.message}</div>`;
+                    return;
+                }
 
                 if (!data || data.length === 0) {
                     container.innerHTML = '<div class="card" style="text-align:center;">Henüz servis kaydı bulunmuyor.</div>';
@@ -62,7 +68,8 @@
                     container.appendChild(card);
                 });
             } catch (err) {
-                document.getElementById('loading').innerText = 'Kayıtlar yüklenirken hata oluştu.';
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('records-list').innerHTML = '<div class="card" style="color:red;">Bağlantı hatası oluştu.</div>';
                 console.error(err);
             }
         }
