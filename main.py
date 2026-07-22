@@ -219,14 +219,22 @@ async def kayit_plaka_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     raw_text = update.message.text.strip()
     clean_text = re.sub(r"\s+", "", raw_text.upper())
     
+    # Gerçek Plaka Formatı Kontrolü (İl Kodu + Harf + Rakam)
     plaka_regex = r"^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{2,4})$"
     match = re.match(plaka_regex, clean_text)
     
-    if match:
-        il, harf, rakam = match.groups()
-        plaka = f"{il} {harf} {rakam}"
-    else:
-        plaka = format_plaka(raw_text)
+    if not match:
+        await update.message.reply_text(
+            "⚠️ **Geçersiz plaka formatı!**\n\n"
+            "Lütfen geçerli bir otobüs plakası girin (Örn: `46 H 0123` veya `46H0123`):\n"
+            "*(İşlemi iptal etmek için /iptal yazabilirsiniz)*",
+            parse_mode="Markdown"
+        )
+        return PLAKA  # Aynı adımda kal ve tekrar plaka iste
+
+    # Format doğruysa standart boşluklu formata getir
+    il, harf, rakam = match.groups()
+    plaka = f"{il} {harf} {rakam}"
 
     context.user_data['plaka'] = plaka
 
@@ -237,7 +245,7 @@ async def kayit_plaka_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except Exception as e:
         logger.error(f"Plaka kontrol/ekleme hatası: {e}")
 
-    await update.message.reply_text(f"✅ Plaka: {plaka}\n\nYapılan teknik işlemi / tamiri detaylıca yazın:")
+    await update.message.reply_text(f"✅ Plaka: **{plaka}**\n\nYapılan teknik işlemi / tamiri detaylıca yazın:", parse_mode="Markdown")
     return ISLEM
 
 
