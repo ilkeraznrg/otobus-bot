@@ -30,7 +30,7 @@ import config
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
-logger = logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # --- RENDER HEALTH CHECK SERVER ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -56,11 +56,22 @@ PLAKA, ISLEM, GARANTI, FOTO = range(4)
 def format_plaka(plaka: str) -> str:
     return re.sub(r"\s+", " ", plaka.strip().upper())
 
+def kullanici_yetkili_mi(telegram_id: int) -> bool:
+    """Kullanıcının Telegram ID'si veritabanında tanımlı mı kontrol eder."""
+    try:
+        res = supabase.table("yetkili_kullanicilar").select("id").eq("telegram_id", telegram_id).execute()
+        return len(res.data) > 0
+    except Exception as e:
+        logger.error(f"Yetki kontrol hatası: {e}")
+        return False
+
 
 # --- BOT AÇILIŞINDA TELEGRAM MENÜSÜNE KOMUTLARI EKLEME ---
 async def post_init(application: Application) -> None:
     commands = [
-        BotCommand("start", "Botu Başlat ve Menüyü Aç"),
+        BotCommand("start", "Botu Başlat"),
+        BotCommand("giris", "Kullanıcı Adı ve Şifre ile Giriş Yap"),
+        BotCommand("cikis", "Oturumu Kapat"),
         BotCommand("yeni_kayit", "Yeni Servis Kaydı Oluştur"),
         BotCommand("iptal", "Devam Eden İşlemi İptal Et")
     ]
@@ -68,11 +79,80 @@ async def post_init(application: Application) -> None:
     logger.info("Bot komut menüsü Telegram'a kaydedildi.")
 
 
+# --- KULLANICI GİRİŞ VE ÇIKIŞ İŞLEMLERİ ---
+
+async def giris_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    telegram_id = update.effective_user.id
+    
+    if kullanici_yetkili_mi(telegram_id):
+        await update.message.reply_text("✅ Zaten giriş yapmış durumdasınız. Sistemi direkt kullanabilirsiniz.")
+        return
+
+    # Komut kullanımı: /giris kullanici_adi sifre
+    if len(context.args) < 2:
+        await update.message.reply_text(
+            "🔒 **Giriş Yapmak İçin:**\n"
+            "Lütfen komutu şu şekilde yazın:\n"
+            "`/giris kullanici_adi sifre`\n\n"
+            "Örnek: `/giris usta1 1234`",
+            parse_mode="Markdown"
+        )
+        return
+
+    k_adi = context.args[0].strip()
+    sifre = context.args[1].strip()
+
+    try:
+        res = supabase.table("yetkili_kullanicilar").select("*").eq("kullanici_adi", k_adi).eq("sifre", sifre).execute()
+        
+        if res.data:
+            # Telegram ID'yi veritabanındaki kullanıcıya eşle
+            user_rec = res.data[0]
+            supabase.table("yetkili_kullanicilar").update({"telegram_id": telegram_id}).eq("id", user_rec["id"]).execute()
+            
+            keyboard = [
+                [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
+                [KeyboardButton(text="➕ Yeni Servis Kaydı")]
+            ]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+            await update.message.reply_text(
+                f"🎉 Hoş geldiniz **{user_rec.get('ad_soyad') or k_adi}**!\n"
+                f"Giriş başarılı. Artık servis kaydı ekleyebilir ve sorgulama yapabilirsiniz.",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text("❌ Hatalı kullanıcı adı veya şifre!")
+    except Exception as e:
+        logger.error(f"Giriş hatası: {e}")
+        await update.message.reply_text("❌ Giriş yapılırken bir veritabanı hatası oluştu.")
+
+
+async def cikis_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    telegram_id = update.effective_user.id
+    try:
+        supabase.table("yetkili_kullanicilar").update({"telegram_id": None}).eq("telegram_id", telegram_id).execute()
+        await update.message.reply_text("🔒 Oturumunuz kapatıldı. Tekrar işlem yapmak için `/giris` yapmalısınız.")
+    except Exception as e:
+        logger.error(f"Çıkış hatası: {e}")
+
+
 # --- KOMUT VE GENEL MESAJ HANDLERLARI ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
+    telegram_id = update.effective_user.id
     
+    if not kullanici_yetkili_mi(telegram_id):
+        await update.message.reply_text(
+            "🔒 **Sisteme Giriş Yapmanız Gerekiyor**\n\n"
+            "İşlem yapabilmek için lütfen kullanıcı adı ve şifrenizi girin:\n"
+            "`/giris kullanici_adi sifre`\n\n"
+            "*(Örn: `/giris usta1 1234`)*",
+            parse_mode="Markdown"
+        )
+        return
+
     keyboard = [
         [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
         [KeyboardButton(text="➕ Yeni Servis Kaydı")]
@@ -80,7 +160,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
     welcome_text = (
-        f"Merhaba {user.first_name}! 🚌\n\n"
+        f"Merhaba {update.effective_user.first_name}! 🚌\n\n"
         f"Belediye Otobüs Teknik Takip Botuna hoş geldiniz.\n\n"
         f"• Tam plaka (`46 H 0123`) veya kısmi numara (`0123`) yazarak son servis kayıtlarını sorgulayabilirsiniz.\n"
         f"• Yeni servis kaydı açmak için /yeni_kayit yazabilir veya **'➕ Yeni Servis Kaydı'** butonuna basabilirsiniz.\n"
@@ -91,7 +171,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def otobus_detay_goster(message_or_query, plaka: str):
-    """Bulunan plakanın verilerini Supabase'den çekip mesaj atar."""
     try:
         otobus_res = supabase.table("otobusler").select("*").eq("plaka", plaka).execute()
         
@@ -130,10 +209,15 @@ async def otobus_detay_goster(message_or_query, plaka: str):
         await message_or_query.reply_text(msg)
     except Exception as e:
         logger.error(f"Sorgu hatası: {e}")
-        await message_or_query.reply_text("❌ Sorgulama yapılırken bir hata oluştu.")
 
 
 async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    telegram_id = update.effective_user.id
+    
+    if not kullanici_yetkili_mi(telegram_id):
+        await update.message.reply_text("🔒 Lütfen önce giriş yapın: `/giris kullanici_adi sifre`", parse_mode="Markdown")
+        return
+
     raw_text = update.message.text.strip()
 
     if raw_text in ["📱 Servis Panelini Aç", "➕ Yeni Servis Kaydı"]:
@@ -141,7 +225,7 @@ async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TY
 
     clean_text = re.sub(r"\s+", "", raw_text.upper())
 
-    # 1. KONTROL: Tam Plaka mı? (Örn: 46 H 0123, 46H0123)
+    # 1. Tam Plaka Kontrolü
     plaka_regex = r"^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{2,4})$"
     match = re.match(plaka_regex, clean_text)
 
@@ -151,11 +235,10 @@ async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TY
         await otobus_detay_goster(update.message, plaka)
         return
 
-    # 2. KONTROL: Kısmi Arama mı? (Örn: "0123", "46 H", "12")
+    # 2. Kısmi Arama
     if len(clean_text) >= 2 and any(char.isdigit() for char in clean_text):
         try:
             res = supabase.table("otobusler").select("plaka").ilike("plaka", f"%{clean_text}%").limit(5).execute()
-            
             if res.data:
                 keyboard = []
                 for item in res.data:
@@ -172,7 +255,7 @@ async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception as e:
             logger.error(f"Kısmi arama hatası: {e}")
 
-    # 3. KONTROL: Geçersiz Metinler İçin Rehber Menü
+    # 3. Rehber Menü
     keyboard = [
         [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
         [KeyboardButton(text="➕ Yeni Servis Kaydı")]
@@ -183,18 +266,20 @@ async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TY
         "🤖 **Nasıl Yardımcı Olabilirim?**\n\n"
         "🔍 **Eski Kayıt Sorgulama:** Tam plaka (`46 H 0123`) veya kısmi numara (`0123`) yazabilirsiniz.\n\n"
         "📝 **Yeni Kayıt Ekleme:** `/yeni_kayit` yazın veya aşağıdaki **'➕ Yeni Servis Kaydı'** butonuna basın.\n\n"
-        "🌐 **Tüm Liste & Web Panel:** Tüm geçmiş servis verilerini görmek için **'📱 Servis Panelini Aç'** butonunu kullanın.\n\n"
-        "❌ **İşlem İptali:** Devam eden bir kaydı iptal etmek için `/iptal` yazabilirsiniz."
+        "🌐 **Tüm Liste & Web Panel:** Tüm geçmiş servis verilerini görmek için **'📱 Servis Panelini Aç'** butonunu kullanın."
     )
 
     await update.message.reply_text(rehber_mesaj, reply_markup=reply_markup, parse_mode="Markdown")
 
 
 async def plaka_buton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Kısmi arama sonucu çıkan butonlara tıklanınca çalışır."""
     query = update.callback_query
     await query.answer()
     
+    if not kullanici_yetkili_mi(query.from_user.id):
+        await query.message.reply_text("🔒 Bu işlemi yapmak için giriş yapmalısınız.")
+        return
+
     data = query.data
     if data.startswith("plaka_sec_"):
         plaka = data.replace("plaka_sec_", "")
@@ -204,6 +289,10 @@ async def plaka_buton_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 # --- SERVİS KAYDI CONVERSATION HANDLER ---
 
 async def kayit_baslat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if not kullanici_yetkili_mi(update.effective_user.id):
+        await update.message.reply_text("🔒 Yeni servis kaydı açabilmek için lütfen giriş yapın: `/giris kullanici_adi sifre`", parse_mode="Markdown")
+        return ConversationHandler.END
+
     context.user_data.clear()
     
     if update.message.photo:
@@ -219,7 +308,6 @@ async def kayit_plaka_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     raw_text = update.message.text.strip()
     clean_text = re.sub(r"\s+", "", raw_text.upper())
     
-    # Gerçek Plaka Formatı Kontrolü (İl Kodu + Harf + Rakam)
     plaka_regex = r"^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{2,4})$"
     match = re.match(plaka_regex, clean_text)
     
@@ -230,12 +318,10 @@ async def kayit_plaka_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "*(İşlemi iptal etmek için /iptal yazabilirsiniz)*",
             parse_mode="Markdown"
         )
-        return PLAKA  # Aynı adımda kal ve tekrar plaka iste
+        return PLAKA
 
-    # Format doğruysa standart boşluklu formata getir
     il, harf, rakam = match.groups()
     plaka = f"{il} {harf} {rakam}"
-
     context.user_data['plaka'] = plaka
 
     try:
@@ -243,7 +329,7 @@ async def kayit_plaka_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if not res.data:
             supabase.table("otobusler").insert({"plaka": plaka}).execute()
     except Exception as e:
-        logger.error(f"Plaka kontrol/ekleme hatası: {e}")
+        logger.error(f"Plaka kontrol hatası: {e}")
 
     await update.message.reply_text(f"✅ Plaka: **{plaka}**\n\nYapılan teknik işlemi / tamiri detaylıca yazın:", parse_mode="Markdown")
     return ISLEM
@@ -380,6 +466,8 @@ def main():
     )
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("giris", giris_yap))
+    app.add_handler(CommandHandler("cikis", cikis_yap))
     app.add_handler(kayit_handler)
     app.add_handler(CallbackQueryHandler(plaka_buton_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, genel_mesaj_fonsiyonu))
