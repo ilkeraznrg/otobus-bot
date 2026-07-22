@@ -51,13 +51,13 @@ def run_health_check_server():
 
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
-PLAKA, ISLEM, GARANTI, FOTO = range(4)
+# Konuşma Adımları (States)
+PLAKA, ISLEM, GARANTI, UCRET, SOFOR, FOTO = range(6)
 
 def format_plaka(plaka: str) -> str:
     return re.sub(r"\s+", " ", plaka.strip().upper())
 
 def kullanici_yetkili_mi(telegram_id: int) -> bool:
-    """Kullanıcının Telegram ID'si veritabanında tanımlı mı kontrol eder."""
     try:
         res = supabase.table("yetkili_kullanicilar").select("id").eq("telegram_id", telegram_id).execute()
         return len(res.data) > 0
@@ -88,13 +88,12 @@ async def giris_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("✅ Zaten giriş yapmış durumdasınız. Sistemi direkt kullanabilirsiniz.")
         return
 
-    # Komut kullanımı: /giris kullanici_adi sifre
     if len(context.args) < 2:
         await update.message.reply_text(
             "🔒 **Giriş Yapmak İçin:**\n"
             "Lütfen komutu şu şekilde yazın:\n"
             "`/giris kullanici_adi sifre`\n\n"
-            "Örnek: `/giris usta1 1234`",
+            "Örnek: `/giris hasan hasan46.`",
             parse_mode="Markdown"
         )
         return
@@ -106,7 +105,6 @@ async def giris_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         res = supabase.table("yetkili_kullanicilar").select("*").eq("kullanici_adi", k_adi).eq("sifre", sifre).execute()
         
         if res.data:
-            # Telegram ID'yi veritabanındaki kullanıcıya eşle
             user_rec = res.data[0]
             supabase.table("yetkili_kullanicilar").update({"telegram_id": telegram_id}).eq("id", user_rec["id"]).execute()
             
@@ -147,8 +145,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
             "🔒 **Sisteme Giriş Yapmanız Gerekiyor**\n\n"
             "İşlem yapabilmek için lütfen kullanıcı adı ve şifrenizi girin:\n"
-            "`/giris kullanici_adi sifre`\n\n"
-            "*(Örn: `/giris usta1 1234`)*",
+            "`/giris kullanici_adi sifre`",
             parse_mode="Markdown"
         )
         return
@@ -190,8 +187,6 @@ async def otobus_detay_goster(message_or_query, plaka: str):
 
         msg = f"🚌 ARAÇ BİLGİSİ\n"
         msg += f"Plaka: {otobus['plaka']}\n"
-        msg += f"Hat No: {otobus.get('hat_no') or 'Belirtilmedi'}\n"
-        msg += f"Sürücü İletişim: {otobus.get('sofor_iletisim') or 'Belirtilmedi'}\n"
         msg += f"───────────────────\n\n"
 
         if servis_res.data:
@@ -199,6 +194,10 @@ async def otobus_detay_goster(message_or_query, plaka: str):
             for kayit in servis_res.data:
                 msg += f"📅 Tarih: {kayit['tarih']}\n"
                 msg += f"🔧 İşlem: {kayit['yapilan_islem']}\n"
+                if kayit.get('ucret'):
+                    msg += f"💰 Ücret: {kayit['ucret']}\n"
+                if kayit.get('sofor_bilgi'):
+                    msg += f"👤 Şoför / İletişim: {kayit['sofor_bilgi']}\n"
                 msg += f"🛡 Garanti Bitiş: {kayit.get('garanti_bitis') or 'Yok'}\n"
                 if kayit.get('foto_url'):
                     msg += f"🖼 Servis Fotoğrafı: {kayit['foto_url']}\n"
@@ -359,6 +358,34 @@ async def kayit_garanti_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await update.message.reply_text("⚠️ Geçersiz tarih formatı! Lütfen YYYY-AA-GG şeklinde girin veya 'Pas' yazın:")
             return GARANTI
 
+    await update.message.reply_text(
+        "💰 Alınan servis ücretini yazın (Örn: 1500 TL).\nYoksa 'Pas' yazın veya aşağıdaki butona basın:",
+        reply_markup=ReplyKeyboardMarkup([["Pas"]], resize_keyboard=True, one_time_keyboard=True)
+    )
+    return UCRET
+
+
+async def kayit_ucret_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+    if text.lower() == "pas":
+        context.user_data['ucret'] = None
+    else:
+        context.user_data['ucret'] = text
+
+    await update.message.reply_text(
+        "👤 Şoför Adı ve Telefon Numarasını yazın (Örn: Ahmet Yılmaz - 0532 000 0000).\nYoksa 'Pas' yazın:",
+        reply_markup=ReplyKeyboardMarkup([["Pas"]], resize_keyboard=True, one_time_keyboard=True)
+    )
+    return SOFOR
+
+
+async def kayit_sofor_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    text = update.message.text.strip()
+    if text.lower() == "pas":
+        context.user_data['sofor_bilgi'] = None
+    else:
+        context.user_data['sofor_bilgi'] = text
+
     if 'photo' not in context.user_data:
         await update.message.reply_text(
             "📷 Servis işlemiyle ilgili bir fotoğraf gönderin veya fotoğraf yoksa Pas yazın:",
@@ -408,7 +435,10 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         
         if context.user_data.get('garanti'):
             kayit_payload["garanti_bitis"] = context.user_data['garanti']
-            
+        if context.user_data.get('ucret'):
+            kayit_payload["ucret"] = context.user_data['ucret']
+        if context.user_data.get('sofor_bilgi'):
+            kayit_payload["sofor_bilgi"] = context.user_data['sofor_bilgi']
         if foto_url:
             kayit_payload["foto_url"] = foto_url
 
@@ -457,6 +487,8 @@ def main():
             PLAKA: [MessageHandler(filters.TEXT & ~filters.COMMAND, kayit_plaka_al)],
             ISLEM: [MessageHandler(filters.TEXT & ~filters.COMMAND, kayit_islem_al)],
             GARANTI: [MessageHandler(filters.TEXT & ~filters.COMMAND, kayit_garanti_al)],
+            UCRET: [MessageHandler(filters.TEXT & ~filters.COMMAND, kayit_ucret_al)],
+            SOFOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, kayit_sofor_al)],
             FOTO: [
                 MessageHandler(filters.PHOTO, kayit_foto_al),
                 MessageHandler(filters.Regex("^PAS$|^Pas$"), kayit_tamamla)
