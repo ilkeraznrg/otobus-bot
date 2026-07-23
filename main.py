@@ -78,15 +78,12 @@ def compress_image(image_bytes: bytes) -> bytes:
     try:
         img = Image.open(io.BytesIO(image_bytes))
         
-        # RGB moduna çevir (PNG veya RGBA geldiyse JPEG için gerekli)
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
             
-        # Maksimum 1280px genişlik/yükseklik boyutlandırma
         img.thumbnail((1280, 1280))
         
         output = io.BytesIO()
-        # %75 kalite ile JPEG olarak sıkıştır
         img.save(output, format="JPEG", quality=75, optimize=True)
         return output.getvalue()
     except Exception as e:
@@ -126,8 +123,8 @@ async def giris_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if len(context.args) < 2:
         await update.message.reply_text(
-            "🔒 **Usta / Yetkili Girişi:**\n"
-            "Lütfen komutu şu şekilde yazın:\n"
+            "🔒 **Usta / Yetkili Girişi:**\n\n"
+            "Lütfen komutu kullanıcı adınız ve şifrenizle birlikte yazın:\n"
             "`/giris kullanici_adi sifre`\n\n"
             "Örnek: `/giris hasan hasan46.`",
             parse_mode="Markdown"
@@ -175,21 +172,44 @@ async def cikis_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # --- KOMUT VE GENEL MESAJ HANDLERLARI ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    keyboard = [
+    user_name = update.effective_user.first_name
+    telegram_id = update.effective_user.id
+    is_authorized = kullanici_yetkili_mi(telegram_id)
+
+    # Alt Sabit Klavye (Reply Keyboard)
+    reply_keyboard = [
         [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
         [KeyboardButton(text="➕ Yeni Servis Kaydı")]
     ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+
+    # Mesaj İçi Tıklanabilir Butonlar (Inline Keyboard)
+    inline_keyboard = [
+        [InlineKeyboardButton("📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))]
+    ]
+
+    if is_authorized:
+        inline_keyboard.append([InlineKeyboardButton("➕ Yeni Servis Kaydı Aç", callback_data="btn_yeni_kayit")])
+        inline_keyboard.append([InlineKeyboardButton("🔒 Oturumu Kapat", callback_data="btn_cikis")])
+        status_text = "✅ **Usta Girişi Yapılmış Durumda**"
+    else:
+        inline_keyboard.append([InlineKeyboardButton("🔑 Usta Girişi Yap (/giris)", callback_data="btn_giris_bilgi")])
+        status_text = "ℹ️ **Misafir Modu** (Servis kaydı açmak için usta girişi gereklidir)"
+
+    inline_markup = InlineKeyboardMarkup(inline_keyboard)
 
     welcome_text = (
-        f"Merhaba {update.effective_user.first_name}! 🚌\n\n"
+        f"Merhaba **{user_name}**! 🚌\n\n"
         f"Belediye Otobüs Teknik Takip Botuna hoş geldiniz.\n\n"
-        f"• Tam plaka (`46 H 0123`) veya kısmi numara (`0123`) yazarak son servis kayıtlarını sorgulayabilirsiniz.\n"
-        f"• Tüm geçmiş servis kayıtlarını ve fotoğrafları görmek için **'📱 Servis Panelini Aç'** butonunu kullanabilirsiniz.\n"
-        f"• Ustalar yeni servis kaydı eklemek için `/giris` yapabilir."
+        f"• **Plaka Sorgulama:** Sohbet alanına doğrudan tam plaka (`46 H 0123`) veya kısmi numara (`0123`) yazabilirsiniz.\n"
+        f"• **Servis Paneli:** Tüm geçmiş verileri ve fotoğrafları görmek için **'📱 Servis Panelini Aç'** butonunu kullanabilirsiniz.\n\n"
+        f"Durum: {status_text}\n\n"
+        f"Hızlı işlem yapmak için aşağıdaki butonları kullanabilirsiniz 👇"
     )
     
-    await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode="Markdown")
+    await update.message.reply_text(welcome_text, reply_markup=inline_markup, parse_mode="Markdown")
+    # Kullanıcı ilk açtığında alt menüyü de gösterelim
+    await update.message.reply_text("İşlem Menüsü:", reply_markup=reply_markup)
 
 
 async def otobus_detay_goster(message_or_query, plaka: str):
@@ -291,14 +311,39 @@ async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(rehber_mesaj, reply_markup=reply_markup, parse_mode="Markdown")
 
 
-async def plaka_buton_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def buton_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
 
     data = query.data
+
     if data.startswith("plaka_sec_"):
         plaka = data.replace("plaka_sec_", "")
         await otobus_detay_goster(query.message, plaka)
+
+    elif data == "btn_giris_bilgi":
+        await query.message.reply_text(
+            "🔒 **Usta Girişi Nasıl Yapılır?**\n\n"
+            "Sohbet alanına kullanıcı adınızı ve şifrenizi şu şekilde yazıp gönderin:\n"
+            "`/giris kullanici_adi sifre`\n\n"
+            "*(Örn: `/giris hasan hasan46.`)*",
+            parse_mode="Markdown"
+        )
+
+    elif data == "btn_yeni_kayit":
+        if kullanici_yetkili_mi(query.from_user.id):
+            await query.message.reply_text("📝 Yeni Servis Kaydı\n\nLütfen otobüs plakasını girin (Örn: 46 H 0123):")
+            # Conversation handler başlatmak için komut tetiklemesi yönlendirmesi
+            return
+        else:
+            await query.message.reply_text("🔒 Kayıt ekleyebilmek için lütfen giriş yapın: `/giris kullanici_adi sifre`", parse_mode="Markdown")
+
+    elif data == "btn_cikis":
+        try:
+            supabase.table("yetkili_kullanicilar").update({"telegram_id": None}).eq("telegram_id", query.from_user.id).execute()
+            await query.message.reply_text("🔒 Oturumunuz kapatıldı. Artık misafir modundasınız.")
+        except Exception as e:
+            logger.error(f"Çıkış hatası: {e}")
 
 
 # --- SERVİS KAYDI CONVERSATION HANDLER ---
@@ -443,9 +488,7 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             file = await context.bot.get_file(photo_item.file_id)
             file_bytes = await file.download_as_bytearray()
             
-            # FOTOĞRAF SIKIŞTIRMA VE BOYUTLANDIRMA
             compressed_bytes = compress_image(bytes(file_bytes))
-            
             file_path = f"{context.user_data['plaka']}_{uuid.uuid4().hex[:8]}.jpg"
             
             supabase.storage.from_("servis-fotolari").upload(
@@ -535,7 +578,7 @@ def main():
     app.add_handler(CommandHandler("giris", giris_yap))
     app.add_handler(CommandHandler("cikis", cikis_yap))
     app.add_handler(kayit_handler)
-    app.add_handler(CallbackQueryHandler(plaka_buton_callback))
+    app.add_handler(CallbackQueryHandler(buton_callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, genel_mesaj_fonsiyonu))
 
     logger.info("Bot ve Sunucu başlatılıyor...")
