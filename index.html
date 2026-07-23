@@ -55,9 +55,10 @@
             cursor: pointer;
             margin-bottom: 15px;
             box-shadow: 0 2px 5px rgba(39, 174, 96, 0.3);
-            display: none; /* JS ile control edilecek */
+            display: none;
         }
 
+        /* İSTATİSTİK KARTLARI (TIKLANABİLİR) */
         .stats-bar { display: flex; gap: 10px; margin-bottom: 15px; }
         .stat-card {
             flex: 1;
@@ -66,6 +67,19 @@
             border-radius: 8px;
             text-align: center;
             box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+            user-select: none;
+        }
+        .stat-card:active { transform: scale(0.97); }
+        .stat-card.active {
+            border-color: var(--primary);
+            background-color: #f0f8ff;
+        }
+        .stat-card.active-guarantee {
+            border-color: var(--success);
+            background-color: #e8f8f5;
         }
         .stat-val { font-size: 1.2em; font-weight: bold; color: var(--primary); }
         .stat-lbl { font-size: 0.75em; color: var(--text-muted); }
@@ -177,14 +191,15 @@
     <!-- KAYIT EKLEME BUTONU -->
     <button id="add-record-btn" class="btn-add-record" onclick="openAddRecordModal()">➕ Yeni Servis Kaydı Ekle</button>
 
+    <!-- TIKLANABİLİR İSTATİSTİK KARTLARI -->
     <div class="stats-bar">
-        <div class="stat-card">
+        <div class="stat-card active" id="card-total" onclick="setFilter('all')">
             <div class="stat-val" id="total-count">0</div>
-            <div class="stat-lbl">Toplam Kayıt</div>
+            <div class="stat-lbl">Tüm Kayıtlar</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-val" id="guarantee-count">0</div>
-            <div class="stat-lbl">Garantili Parça</div>
+        <div class="stat-card" id="card-guarantee" onclick="setFilter('guarantee')">
+            <div class="stat-val" id="guarantee-count" style="color: var(--success);">0</div>
+            <div class="stat-lbl">Garantili Parçalar</div>
         </div>
     </div>
 
@@ -241,6 +256,7 @@
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         let allRecords = [];
         let isLoggedIn = false;
+        let currentFilter = 'all'; // 'all' veya 'guarantee'
 
         const INACTIVITY_LIMIT = 15 * 60 * 1000;
         let inactivityTimer;
@@ -289,7 +305,7 @@
         function logoutUser(message = null) {
             localStorage.removeItem('panel_user');
             checkSession();
-            renderList(allRecords);
+            filterRecords();
             if (message) alert(message);
         }
 
@@ -311,6 +327,23 @@
             document.getElementById('record-error').style.display = 'none';
         }
 
+        // FİLTRE DEĞİŞTİRME FONKSİYONU
+        function setFilter(type) {
+            currentFilter = type;
+            const cardTotal = document.getElementById('card-total');
+            const cardGuarantee = document.getElementById('card-guarantee');
+
+            if (type === 'all') {
+                cardTotal.className = 'stat-card active';
+                cardGuarantee.className = 'stat-card';
+            } else if (type === 'guarantee') {
+                cardTotal.className = 'stat-card';
+                cardGuarantee.className = 'stat-card active-guarantee';
+            }
+
+            filterRecords();
+        }
+
         async function loginUser() {
             const kAdi = document.getElementById('login-username').value.trim();
             const sifre = document.getElementById('login-password').value.trim();
@@ -325,7 +358,7 @@
                 localStorage.setItem('panel_user', kAdi);
                 closeModal('login-modal');
                 checkSession();
-                renderList(allRecords);
+                filterRecords();
             } else {
                 document.getElementById('login-error').style.display = 'block';
             }
@@ -432,7 +465,7 @@
                 document.getElementById('guarantee-count').innerText = guaranteed;
 
                 checkSession();
-                renderList(allRecords);
+                filterRecords();
 
             } catch (err) {
                 document.getElementById('loading').style.display = 'none';
@@ -440,12 +473,29 @@
             }
         }
 
+        function filterRecords() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            
+            let filtered = allRecords.filter(r => 
+                (r.plaka && r.plaka.toLowerCase().includes(query)) ||
+                (r.yapilan_islem && r.yapilan_islem.toLowerCase().includes(query)) ||
+                (r.sofor_bilgi && r.sofor_bilgi.toLowerCase().includes(query))
+            );
+
+            // Eğer Garantili Parçalar kartına tıklandıysa ekstra süzgeç uygula
+            if (currentFilter === 'guarantee') {
+                filtered = filtered.filter(r => r.garanti_bitis !== null && r.garanti_bitis !== '');
+            }
+
+            renderList(filtered);
+        }
+
         function renderList(records) {
             const container = document.getElementById('records-list');
             container.innerHTML = '';
 
             if (records.length === 0) {
-                container.innerHTML = '<div class="card" style="text-align:center;">Kayıt bulunamadı.</div>';
+                container.innerHTML = '<div class="card" style="text-align:center; color:#7f8c8d;">Kayıt bulunamadı.</div>';
                 return;
             }
 
@@ -467,16 +517,6 @@
                 `;
                 container.appendChild(card);
             });
-        }
-
-        function filterRecords() {
-            const query = document.getElementById('search-input').value.toLowerCase();
-            const filtered = allRecords.filter(r => 
-                (r.plaka && r.plaka.toLowerCase().includes(query)) ||
-                (r.yapilan_islem && r.yapilan_islem.toLowerCase().includes(query)) ||
-                (r.sofor_bilgi && r.sofor_bilgi.toLowerCase().includes(query))
-            );
-            renderList(filtered);
         }
 
         if (window.Telegram && window.Telegram.WebApp) {
