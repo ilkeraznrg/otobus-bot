@@ -2,9 +2,11 @@ import logging
 import re
 import uuid
 import os
+import io
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from datetime import datetime
+from PIL import Image
 from telegram import (
     Update, 
     ReplyKeyboardMarkup, 
@@ -70,6 +72,26 @@ def format_date_for_display(date_str: str) -> str:
     except Exception:
         pass
     return date_str
+
+def compress_image(image_bytes: bytes) -> bytes:
+    """Fotoğrafı kalitesini bozmadan sıkıştırır ve maksimum boyutlandırır."""
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        
+        # RGB moduna çevir (PNG veya RGBA geldiyse JPEG için gerekli)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+            
+        # Maksimum 1280px genişlik/yükseklik boyutlandırma
+        img.thumbnail((1280, 1280))
+        
+        output = io.BytesIO()
+        # %75 kalite ile JPEG olarak sıkıştır
+        img.save(output, format="JPEG", quality=75, optimize=True)
+        return output.getvalue()
+    except Exception as e:
+        logger.error(f"Fotoğraf sıkıştırma hatası: {e}")
+        return image_bytes
 
 def kullanici_yetkili_mi(telegram_id: int) -> bool:
     try:
@@ -360,7 +382,6 @@ async def kayit_garanti_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 continue
 
         if parsed_date:
-            # DB için ISO standartı (YYYY-MM-DD) saklıyoruz
             context.user_data['garanti'] = str(parsed_date)
         else:
             await update.message.reply_text("⚠️ Geçersiz tarih formatı! Lütfen GG.AA.YYYY şeklinde girin (Örn: 31.12.2026) veya 'Pas' yazın:")
@@ -412,7 +433,7 @@ async def kayit_foto_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 
 async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("⏳ Kayıt işleniyor, lütfen bekleyin...")
+    await update.message.reply_text("⏳ Kayıt işleniyor ve fotoğraf optimize ediliyor, lütfen bekleyin...")
     
     foto_url = None
     photo_item = context.user_data.get('photo')
@@ -422,11 +443,14 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             file = await context.bot.get_file(photo_item.file_id)
             file_bytes = await file.download_as_bytearray()
             
+            # FOTOĞRAF SIKIŞTIRMA VE BOYUTLANDIRMA
+            compressed_bytes = compress_image(bytes(file_bytes))
+            
             file_path = f"{context.user_data['plaka']}_{uuid.uuid4().hex[:8]}.jpg"
             
             supabase.storage.from_("servis-fotolari").upload(
                 file_path, 
-                bytes(file_bytes),
+                compressed_bytes,
                 file_options={"content-type": "image/jpeg"}
             )
             
@@ -435,7 +459,6 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             logger.error(f"Fotoğraf yükleme hatası: {e}")
 
     try:
-        # DB için ISO standartı (YYYY-MM-DD) kullanıyoruz
         bugun_db = datetime.now().strftime("%Y-%m-%d")
 
         kayit_payload = {
