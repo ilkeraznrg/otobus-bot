@@ -27,7 +27,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px; 
+            margin-bottom: 12px; 
         }
         .header h2 { margin: 0; font-size: 1.2em; }
         
@@ -35,7 +35,7 @@
             background: var(--primary);
             color: white;
             border: none;
-            padding: 6px 12px;
+            padding: 7px 12px;
             border-radius: 6px;
             font-size: 0.85em;
             cursor: pointer;
@@ -54,7 +54,8 @@
             font-size: 0.95em;
             cursor: pointer;
             margin-bottom: 15px;
-            display: none; /* Sadece giriş yapıldığında görünür */
+            box-shadow: 0 2px 5px rgba(39, 174, 96, 0.3);
+            display: none; /* JS ile control edilecek */
         }
 
         .stats-bar { display: flex; gap: 10px; margin-bottom: 15px; }
@@ -173,7 +174,7 @@
         <button id="auth-btn" class="btn-auth" onclick="handleAuthClick()">🔑 Usta Girişi</button>
     </div>
 
-    <!-- KAYIT EKLEME BUTONU (Giriş yapıldığında görünür) -->
+    <!-- KAYIT EKLEME BUTONU -->
     <button id="add-record-btn" class="btn-add-record" onclick="openAddRecordModal()">➕ Yeni Servis Kaydı Ekle</button>
 
     <div class="stats-bar">
@@ -241,7 +242,7 @@
         let allRecords = [];
         let isLoggedIn = false;
 
-        const INACTIVITY_LIMIT = 15 * 60 * 1000; // 15 Dakika
+        const INACTIVITY_LIMIT = 15 * 60 * 1000;
         let inactivityTimer;
 
         function resetInactivityTimer() {
@@ -268,18 +269,19 @@
         function checkSession() {
             const savedUser = localStorage.getItem('panel_user');
             const addBtn = document.getElementById('add-record-btn');
+            const authBtn = document.getElementById('auth-btn');
             
             if (savedUser) {
                 isLoggedIn = true;
-                document.getElementById('auth-btn').innerText = '🚪 Çıkış Yap';
-                document.getElementById('auth-btn').classList.add('logout');
-                addBtn.style.display = 'block'; // Kayıt butonunu göster
+                authBtn.innerText = '🚪 Çıkış Yap';
+                authBtn.classList.add('logout');
+                if (addBtn) addBtn.style.setProperty('display', 'block', 'important');
                 resetInactivityTimer();
             } else {
                 isLoggedIn = false;
-                document.getElementById('auth-btn').innerText = '🔑 Usta Girişi';
-                document.getElementById('auth-btn').classList.remove('logout');
-                addBtn.style.display = 'none'; // Kayıt butonunu gizle
+                authBtn.innerText = '🔑 Usta Girişi';
+                authBtn.classList.remove('logout');
+                if (addBtn) addBtn.style.setProperty('display', 'none', 'important');
                 clearTimeout(inactivityTimer);
             }
         }
@@ -345,7 +347,6 @@
                 return;
             }
 
-            // Plaka Biçimlendirme (46H0123 -> 46 H 0123)
             let cleanPlaka = plakaInput.replace(/\s+/g, '').toUpperCase();
             const match = cleanPlaka.match(/^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{2,4})$/);
             
@@ -360,13 +361,11 @@
             saveBtn.disabled = true;
 
             try {
-                // 1. Otobüs veritabanında var mı kontrol et / ekle
                 const { data: oData } = await supabaseClient.from('otobusler').select('plaka').eq('plaka', formattedPlaka);
                 if (!oData || oData.length === 0) {
                     await supabaseClient.from('otobusler').insert([{ plaka: formattedPlaka }]);
                 }
 
-                // 2. Fotoğraf Varsa Yükle
                 let fotoUrl = null;
                 if (fotoFile) {
                     const filePath = `${formattedPlaka}_${Date.now()}.jpg`;
@@ -377,7 +376,6 @@
                     }
                 }
 
-                // 3. Servis Kaydını Ekle
                 const todayIso = new Date().toISOString().split('T')[0];
                 const payload = {
                     plaka: formattedPlaka,
@@ -391,11 +389,8 @@
 
                 const { error: insErr } = await supabaseClient.from('servis_kayitlari').insert([payload]);
 
-                if (insErr) {
-                    throw insErr;
-                }
+                if (insErr) throw insErr;
 
-                // Formu temizle ve kapat
                 document.getElementById('rec-plaka').value = '';
                 document.getElementById('rec-islem').value = '';
                 document.getElementById('rec-garanti').value = '';
@@ -404,7 +399,7 @@
                 document.getElementById('rec-foto').value = '';
 
                 closeModal('record-modal');
-                loadRecords(); // Listeyi yenile
+                loadRecords();
 
             } catch (err) {
                 console.error(err);
