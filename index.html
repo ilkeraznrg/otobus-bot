@@ -43,6 +43,20 @@
         }
         .btn-auth.logout { background: var(--danger); }
 
+        .btn-add-record {
+            width: 100%;
+            background: var(--success);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.95em;
+            cursor: pointer;
+            margin-bottom: 15px;
+            display: none; /* Sadece giriş yapıldığında görünür */
+        }
+
         .stats-bar { display: flex; gap: 10px; margin-bottom: 15px; }
         .stat-card {
             flex: 1;
@@ -107,6 +121,7 @@
         }
         .loader { text-align: center; padding: 20px; color: var(--text-muted); }
 
+        /* MODAL STİLLERİ */
         .modal {
             display: none;
             position: fixed;
@@ -120,18 +135,22 @@
             background: white;
             padding: 20px;
             border-radius: 10px;
-            width: 85%;
-            max-width: 320px;
+            width: 88%;
+            max-width: 360px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            max-height: 90vh;
+            overflow-y: auto;
         }
         .modal-content h3 { margin-top: 0; margin-bottom: 12px; }
-        .modal-content input {
+        .modal-content label { font-size: 0.85em; font-weight: bold; color: #555; display: block; margin-top: 8px; }
+        .modal-content input, .modal-content textarea {
             width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
+            padding: 9px;
+            margin-top: 4px;
             border: 1px solid #ccc;
             border-radius: 6px;
             box-sizing: border-box;
+            font-family: inherit;
         }
         .modal-content button {
             width: 100%;
@@ -142,6 +161,7 @@
             border-radius: 6px;
             font-weight: bold;
             cursor: pointer;
+            margin-top: 12px;
         }
         .error-msg { color: var(--danger); font-size: 0.8em; margin-top: 5px; display: none; }
     </style>
@@ -152,6 +172,9 @@
         <h2>🚌 Servis Geçmişi</h2>
         <button id="auth-btn" class="btn-auth" onclick="handleAuthClick()">🔑 Usta Girişi</button>
     </div>
+
+    <!-- KAYIT EKLEME BUTONU (Giriş yapıldığında görünür) -->
+    <button id="add-record-btn" class="btn-add-record" onclick="openAddRecordModal()">➕ Yeni Servis Kaydı Ekle</button>
 
     <div class="stats-bar">
         <div class="stat-card">
@@ -176,8 +199,37 @@
             <input type="text" id="login-username" placeholder="Kullanıcı Adı">
             <input type="password" id="login-password" placeholder="Şifre">
             <button onclick="loginUser()">Giriş Yap</button>
-            <button onclick="closeModal()" style="background:#ccc; margin-top:5px; color:#333;">İptal</button>
+            <button onclick="closeModal('login-modal')" style="background:#ccc; color:#333;">İptal</button>
             <div id="login-error" class="error-msg">Hatalı kullanıcı adı veya şifre!</div>
+        </div>
+    </div>
+
+    <!-- SERVİS KAYDI EKLEME MODAL PENCERESİ -->
+    <div id="record-modal" class="modal">
+        <div class="modal-content">
+            <h3>📝 Yeni Servis Kaydı</h3>
+            
+            <label>Otobüs Plakası *</label>
+            <input type="text" id="rec-plaka" placeholder="Örn: 46 H 0123" style="text-transform: uppercase;">
+
+            <label>Yapılan İşlem / Tamir *</label>
+            <textarea id="rec-islem" rows="3" placeholder="Yapılan işlemi detaylıca yazın..."></textarea>
+
+            <label>Garanti Bitiş Tarihi (Opsiyonel)</label>
+            <input type="date" id="rec-garanti">
+
+            <label>Alınan Ücret (Opsiyonel)</label>
+            <input type="text" id="rec-ucret" placeholder="Örn: 1500 TL">
+
+            <label>Şoför / İletişim Bilgisi (Opsiyonel)</label>
+            <input type="text" id="rec-sofor" placeholder="Örn: Ahmet Yılmaz - 0532 000 0000">
+
+            <label>Servis Fotoğrafı (Opsiyonel)</label>
+            <input type="file" id="rec-foto" accept="image/*">
+
+            <button id="save-btn" onclick="saveRecord()">💾 Kaydet</button>
+            <button onclick="closeModal('record-modal')" style="background:#ccc; color:#333;">İptal</button>
+            <div id="record-error" class="error-msg"></div>
         </div>
     </div>
 
@@ -189,8 +241,7 @@
         let allRecords = [];
         let isLoggedIn = false;
 
-        // OTOMATİK ZAMAN AŞIMI (TIMEOUT) AYARLARI
-        const INACTIVITY_LIMIT = 15 * 60 * 1000; // 15 Dakika (milisaniye cinsinden)
+        const INACTIVITY_LIMIT = 15 * 60 * 1000; // 15 Dakika
         let inactivityTimer;
 
         function resetInactivityTimer() {
@@ -202,7 +253,6 @@
             }
         }
 
-        // Kullanıcı hareketlerini dinle (dokunma, kaydırma, tuşa basma)
         ['touchstart', 'mousemove', 'keydown', 'scroll', 'click'].forEach(evt => {
             document.addEventListener(evt, resetInactivityTimer, true);
         });
@@ -217,15 +267,19 @@
 
         function checkSession() {
             const savedUser = localStorage.getItem('panel_user');
+            const addBtn = document.getElementById('add-record-btn');
+            
             if (savedUser) {
                 isLoggedIn = true;
                 document.getElementById('auth-btn').innerText = '🚪 Çıkış Yap';
                 document.getElementById('auth-btn').classList.add('logout');
+                addBtn.style.display = 'block'; // Kayıt butonunu göster
                 resetInactivityTimer();
             } else {
                 isLoggedIn = false;
                 document.getElementById('auth-btn').innerText = '🔑 Usta Girişi';
                 document.getElementById('auth-btn').classList.remove('logout');
+                addBtn.style.display = 'none'; // Kayıt butonunu gizle
                 clearTimeout(inactivityTimer);
             }
         }
@@ -234,9 +288,7 @@
             localStorage.removeItem('panel_user');
             checkSession();
             renderList(allRecords);
-            if (message) {
-                alert(message);
-            }
+            if (message) alert(message);
         }
 
         function handleAuthClick() {
@@ -248,8 +300,13 @@
             }
         }
 
-        function closeModal() {
-            document.getElementById('login-modal').style.display = 'none';
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        function openAddRecordModal() {
+            document.getElementById('record-modal').style.display = 'flex';
+            document.getElementById('record-error').style.display = 'none';
         }
 
         async function loginUser() {
@@ -264,11 +321,98 @@
 
             if (data && data.length > 0) {
                 localStorage.setItem('panel_user', kAdi);
-                closeModal();
+                closeModal('login-modal');
                 checkSession();
                 renderList(allRecords);
             } else {
                 document.getElementById('login-error').style.display = 'block';
+            }
+        }
+
+        async function saveRecord() {
+            const plakaInput = document.getElementById('rec-plaka').value.trim();
+            const islem = document.getElementById('rec-islem').value.trim();
+            const garanti = document.getElementById('rec-garanti').value;
+            const ucret = document.getElementById('rec-ucret').value.trim();
+            const sofor = document.getElementById('rec-sofor').value.trim();
+            const fotoFile = document.getElementById('rec-foto').files[0];
+            const errDiv = document.getElementById('record-error');
+            const saveBtn = document.getElementById('save-btn');
+
+            if (!plakaInput || !islem) {
+                errDiv.innerText = "Lütfen Plaka ve Yapılan İşlem alanlarını doldurun.";
+                errDiv.style.display = 'block';
+                return;
+            }
+
+            // Plaka Biçimlendirme (46H0123 -> 46 H 0123)
+            let cleanPlaka = plakaInput.replace(/\s+/g, '').toUpperCase();
+            const match = cleanPlaka.match(/^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{2,4})$/);
+            
+            if (!match) {
+                errDiv.innerText = "Geçersiz plaka formatı! (Örn: 46 H 0123)";
+                errDiv.style.display = 'block';
+                return;
+            }
+
+            const formattedPlaka = `${match[1]} ${match[2]} ${match[3]}`;
+            saveBtn.innerText = "⏳ Kaydediliyor...";
+            saveBtn.disabled = true;
+
+            try {
+                // 1. Otobüs veritabanında var mı kontrol et / ekle
+                const { data: oData } = await supabaseClient.from('otobusler').select('plaka').eq('plaka', formattedPlaka);
+                if (!oData || oData.length === 0) {
+                    await supabaseClient.from('otobusler').insert([{ plaka: formattedPlaka }]);
+                }
+
+                // 2. Fotoğraf Varsa Yükle
+                let fotoUrl = null;
+                if (fotoFile) {
+                    const filePath = `${formattedPlaka}_${Date.now()}.jpg`;
+                    const { data: stData, error: stErr } = await supabaseClient.storage.from('servis-fotolari').upload(filePath, fotoFile);
+                    if (!stErr) {
+                        const { data: pUrl } = supabaseClient.storage.from('servis-fotolari').getPublicUrl(filePath);
+                        fotoUrl = pUrl.publicUrl;
+                    }
+                }
+
+                // 3. Servis Kaydını Ekle
+                const todayIso = new Date().toISOString().split('T')[0];
+                const payload = {
+                    plaka: formattedPlaka,
+                    yapilan_islem: islem,
+                    tarih: todayIso,
+                    garanti_bitis: garanti || null,
+                    ucret: ucret || null,
+                    sofor_bilgi: sofor || null,
+                    foto_url: fotoUrl
+                };
+
+                const { error: insErr } = await supabaseClient.from('servis_kayitlari').insert([payload]);
+
+                if (insErr) {
+                    throw insErr;
+                }
+
+                // Formu temizle ve kapat
+                document.getElementById('rec-plaka').value = '';
+                document.getElementById('rec-islem').value = '';
+                document.getElementById('rec-garanti').value = '';
+                document.getElementById('rec-ucret').value = '';
+                document.getElementById('rec-sofor').value = '';
+                document.getElementById('rec-foto').value = '';
+
+                closeModal('record-modal');
+                loadRecords(); // Listeyi yenile
+
+            } catch (err) {
+                console.error(err);
+                errDiv.innerText = "Kayıt eklenirken hata oluştu: " + err.message;
+                errDiv.style.display = 'block';
+            } finally {
+                saveBtn.innerText = "💾 Kaydet";
+                saveBtn.disabled = false;
             }
         }
 
