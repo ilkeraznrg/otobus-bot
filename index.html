@@ -28,6 +28,7 @@
             --danger: #ef4444;
             --warning: #f59e0b;
             --whatsapp: #25d366;
+            --border: #e2e8f0;
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -41,15 +42,15 @@
         }
 
         .header { 
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            background: #0f172a;
             color: white;
             padding: 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-bottom: 1px solid var(--border);
         }
-        .header h2 { margin: 0; font-size: 1.15em; font-weight: 700; letter-spacing: -0.3px; }
+        .header h2 { margin: 0; font-size: 1.15em; font-weight: 700; }
         
         .btn-auth {
             background: rgba(255, 255, 255, 0.15);
@@ -60,8 +61,6 @@
             font-size: 0.8em;
             cursor: pointer;
             font-weight: 600;
-            backdrop-filter: blur(5px);
-            transition: all 0.2s;
         }
         .btn-auth.logout { background: #dc2626; border-color: #dc2626; }
 
@@ -69,16 +68,15 @@
 
         .btn-add-record {
             width: 100%;
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: var(--success);
             color: white;
             border: none;
             padding: 14px;
-            border-radius: 12px;
+            border-radius: 10px;
             font-weight: 700;
             font-size: 0.95em;
             cursor: pointer;
             margin-bottom: 12px;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
             display: none;
             text-align: center;
         }
@@ -88,12 +86,10 @@
             flex: 1;
             background: var(--card-bg);
             padding: 12px 8px;
-            border-radius: 12px;
+            border-radius: 10px;
             text-align: center;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+            border: 1px solid var(--border);
             cursor: pointer;
-            transition: all 0.2s;
-            border: 2px solid transparent;
             user-select: none;
         }
         .stat-card.active { border-color: var(--primary); background: #eff6ff; }
@@ -104,48 +100,74 @@
         .search-box {
             width: 100%;
             padding: 12px 16px;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
             font-size: 0.9em;
             box-sizing: border-box;
             margin-bottom: 14px;
             outline: none;
             background: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         }
         .search-box:focus { border-color: var(--primary); }
 
+        /* AKORDEON / KATLANABİLİR KART YAPISI */
         .card {
             background: var(--card-bg);
-            border-radius: 14px;
-            padding: 14px;
-            margin-bottom: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            border: 1px solid #f1f5f9;
-        }
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            border-radius: 10px;
             margin-bottom: 8px;
+            border: 1px solid var(--border);
+            overflow: hidden;
         }
+
+        /* KAPALI BİLGİ SATIRI (BAŞLIK) */
+        .card-summary {
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+            background: white;
+        }
+        .card-summary:active { background: #f8fafc; }
+
+        .summary-left { display: flex; align-items: center; gap: 8px; flex: 1; overflow: hidden; }
         
         .plaka-badge {
             background: #facc15;
             color: #000;
-            padding: 4px 10px;
-            border-radius: 6px;
+            padding: 3px 8px;
+            border-radius: 5px;
             font-weight: 800;
-            font-size: 0.95em;
-            letter-spacing: 0.5px;
-            border: 1.5px solid #000;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            font-size: 0.85em;
+            border: 1px solid #000;
+            white-space: nowrap;
         }
 
-        .tarih { font-size: 0.78em; color: var(--text-muted); font-weight: 500; }
-        .islem { font-size: 0.92em; margin: 8px 0; line-height: 1.45; color: #1e293b; font-weight: 500; }
-        
-        .badges-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .summary-title {
+            font-size: 0.88em;
+            font-weight: 600;
+            color: #1e293b;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .summary-right { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+        .tarih { font-size: 0.75em; color: var(--text-muted); font-weight: 500; }
+        .arrow-icon { font-size: 0.8em; color: var(--text-muted); transition: transform 0.2s; }
+
+        /* AÇILIR DETAY ALANI */
+        .card-details {
+            display: none;
+            padding: 14px;
+            background: #f8fafc;
+            border-top: 1px solid var(--border);
+        }
+
+        .islem-text { font-size: 0.9em; color: #1e293b; margin-bottom: 10px; line-height: 1.45; font-weight: 500; }
+
+        .badges-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
         .badge {
             padding: 4px 8px;
             border-radius: 6px;
@@ -154,7 +176,7 @@
         }
         .badge-ucret { background: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; }
         .badge-garanti { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
-        .badge-sofor { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+        .badge-sofor { background: #ffffff; color: #475569; border: 1px solid var(--border); }
 
         .contact-actions { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
         .btn-call, .btn-wp {
@@ -168,29 +190,28 @@
         .btn-call { background: var(--primary); }
         .btn-wp { background: var(--whatsapp); }
 
+        .img-thumb-container { margin-top: 10px; }
         .img-thumb {
             width: 100%;
-            max-height: 180px;
+            max-height: 200px;
             object-fit: cover;
-            border-radius: 10px;
-            margin-top: 10px;
+            border-radius: 8px;
             cursor: pointer;
-            transition: transform 0.2s;
+            border: 1px solid var(--border);
         }
-        .img-thumb:active { transform: scale(0.98); }
 
         .card-actions {
             display: flex;
             gap: 8px;
             margin-top: 12px;
             padding-top: 10px;
-            border-top: 1px solid #f1f5f9;
+            border-top: 1px dashed var(--border);
         }
         .btn-action {
             flex: 1;
             padding: 8px;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             font-size: 0.8em;
             font-weight: 600;
             cursor: pointer;
@@ -214,7 +235,7 @@
         .modal-content {
             background: white;
             padding: 20px;
-            border-radius: 16px;
+            border-radius: 14px;
             width: 90%;
             max-width: 360px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.15);
@@ -274,7 +295,7 @@
         }
         .error-msg { color: var(--danger); font-size: 0.8em; margin-top: 6px; display: none; }
 
-        /* FOTOĞRAF BÜYÜTME (LIGHTBOX) MODALI */
+        /* LIGHTBOX (TAM EKRAN FOTOĞRAF) */
         .lightbox-modal {
             display: none;
             position: fixed;
@@ -289,7 +310,6 @@
             max-width: 100%;
             max-height: 90vh;
             border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(255,255,255,0.1);
             object-fit: contain;
         }
         .lightbox-close {
@@ -358,7 +378,6 @@
             <input type="hidden" id="existing-foto-url">
 
             <label>Otobüs Plakası *</label>
-            <!-- PLAKA OTOMATİK TAMAMLAMA ÖNERİ LİSTESİ (DATALIST) -->
             <input type="text" id="rec-plaka" list="plaka-suggestions" placeholder="Örn: 46 H 0123 veya 46H94" style="text-transform: uppercase;">
             <datalist id="plaka-suggestions"></datalist>
 
@@ -436,7 +455,6 @@
             return match ? match[0].replace(/[-\s]/g, '') : null;
         }
 
-        // FOTOĞRAF BÜYÜTME (LIGHTBOX) FONKSİYONLARI
         function openLightbox(url) {
             const modal = document.getElementById('lightbox-modal');
             const img = document.getElementById('lightbox-img');
@@ -479,6 +497,18 @@
                 };
                 reader.onerror = (err) => reject(err);
             });
+        }
+
+        function toggleCard(id) {
+            const details = document.getElementById(`details-${id}`);
+            const arrow = document.getElementById(`arrow-${id}`);
+            if (details.style.display === 'block') {
+                details.style.display = 'none';
+                arrow.innerText = '▼';
+            } else {
+                details.style.display = 'block';
+                arrow.innerText = '▲';
+            }
         }
 
         function checkSession() {
@@ -720,13 +750,11 @@
             }
         }
 
-        // PLAKA ÖNERİ LİSTESİNİ DOLDURMA
         function updatePlakaSuggestions() {
             const datalist = document.getElementById('plaka-suggestions');
             if (!datalist) return;
             datalist.innerHTML = '';
 
-            // Tekil plakaları çek
             const uniquePlakas = [...new Set(allRecords.map(r => r.plaka).filter(Boolean))];
             uniquePlakas.forEach(plaka => {
                 const option = document.createElement('option');
@@ -745,7 +773,7 @@
                 document.getElementById('loading').style.display = 'none';
 
                 if (error) {
-                    document.getElementById('records-list').innerHTML = `<div class="card" style="border-left-color:red;">Veri çekilemedi: ${error.message}</div>`;
+                    document.getElementById('records-list').innerHTML = `<div class="card" style="border-left-color:red; padding:10px;">Veri çekilemedi: ${error.message}</div>`;
                     return;
                 }
 
@@ -755,7 +783,7 @@
                 const guaranteed = allRecords.filter(r => r.garanti_bitis).length;
                 document.getElementById('guarantee-count').innerText = guaranteed;
 
-                updatePlakaSuggestions(); // Öneri listesini güncelle
+                updatePlakaSuggestions();
                 checkSession();
                 filterRecords();
 
@@ -786,7 +814,7 @@
             container.innerHTML = '';
 
             if (records.length === 0) {
-                container.innerHTML = '<div class="card" style="text-align:center; color:#64748b;">Kayıt bulunamadı.</div>';
+                container.innerHTML = '<div class="card" style="text-align:center; padding:16px; color:#64748b;">Kayıt bulunamadı.</div>';
                 return;
             }
 
@@ -815,21 +843,37 @@
                     `;
                 }
 
+                const photoIcon = item.foto_url ? '🖼️' : '';
+
                 card.innerHTML = `
-                    <div class="card-header">
-                        <span class="plaka-badge">${item.plaka}</span>
-                        <span class="tarih">📅 ${formatDate(item.tarih)}</span>
-                    </div>
-                    <div class="islem">🔧 ${item.yapilan_islem}</div>
-                    
-                    <div class="badges-row">
-                        ${(isLoggedIn && item.ucret) ? `<span class="badge badge-ucret">💰 ${item.ucret}</span>` : ''}
-                        ${item.garanti_bitis ? `<span class="badge badge-garanti">🛡 Garanti: ${formatDate(item.garanti_bitis)}</span>` : ''}
-                        ${item.sofor_bilgi ? `<span class="badge badge-sofor">👤 ${item.sofor_bilgi} ${contactBtns}</span>` : ''}
+                    <div class="card-summary" onclick="toggleCard(${item.id})">
+                        <div class="summary-left">
+                            <span class="plaka-badge">${item.plaka}</span>
+                            <span class="summary-title">${photoIcon} ${item.yapilan_islem}</span>
+                        </div>
+                        <div class="summary-right">
+                            <span class="tarih">📅 ${formatDate(item.tarih)}</span>
+                            <span id="arrow-${item.id}" class="arrow-icon">▼</span>
+                        </div>
                     </div>
 
-                    ${item.foto_url ? `<img src="${item.foto_url}" class="img-thumb" loading="lazy" onclick="openLightbox('${item.foto_url}')">` : ''}
-                    ${actionsHtml}
+                    <div id="details-${item.id}" class="card-details">
+                        <div class="islem-text">🔧 <b>Yapılan İşlem:</b> ${item.yapilan_islem}</div>
+                        
+                        <div class="badges-row">
+                            ${(isLoggedIn && item.ucret) ? `<span class="badge badge-ucret">💰 ${item.ucret}</span>` : ''}
+                            ${item.garanti_bitis ? `<span class="badge badge-garanti">🛡 Garanti: ${formatDate(item.garanti_bitis)}</span>` : ''}
+                            ${item.sofor_bilgi ? `<span class="badge badge-sofor">👤 ${item.sofor_bilgi} ${contactBtns}</span>` : ''}
+                        </div>
+
+                        ${item.foto_url ? `
+                            <div class="img-thumb-container">
+                                <img src="${item.foto_url}" class="img-thumb" loading="lazy" onclick="openLightbox('${item.foto_url}')">
+                            </div>
+                        ` : ''}
+
+                        ${actionsHtml}
+                    </div>
                 `;
                 container.appendChild(card);
             });
