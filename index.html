@@ -175,7 +175,9 @@
             border-radius: 10px;
             margin-top: 10px;
             cursor: pointer;
+            transition: transform 0.2s;
         }
+        .img-thumb:active { transform: scale(0.98); }
 
         .card-actions {
             display: flex;
@@ -198,6 +200,7 @@
 
         .loader { text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.9em; }
 
+        /* MODAL STİLLERİ */
         .modal {
             display: none;
             position: fixed;
@@ -231,7 +234,6 @@
             font-size: 0.9em;
         }
 
-        /* MODAL İÇİ DÜZENLEME FOTOĞRAF ALANI */
         .preview-box {
             margin-top: 8px;
             padding: 8px;
@@ -271,6 +273,42 @@
             margin-top: 14px;
         }
         .error-msg { color: var(--danger); font-size: 0.8em; margin-top: 6px; display: none; }
+
+        /* FOTOĞRAF BÜYÜTME (LIGHTBOX) MODALI */
+        .lightbox-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+        }
+        .lightbox-img {
+            max-width: 100%;
+            max-height: 90vh;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(255,255,255,0.1);
+            object-fit: contain;
+        }
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 30px;
+            font-weight: bold;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.2);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
     </style>
 </head>
 <body>
@@ -320,7 +358,9 @@
             <input type="hidden" id="existing-foto-url">
 
             <label>Otobüs Plakası *</label>
-            <input type="text" id="rec-plaka" placeholder="Örn: 46 H 0123 veya 46H94" style="text-transform: uppercase;">
+            <!-- PLAKA OTOMATİK TAMAMLAMA ÖNERİ LİSTESİ (DATALIST) -->
+            <input type="text" id="rec-plaka" list="plaka-suggestions" placeholder="Örn: 46 H 0123 veya 46H94" style="text-transform: uppercase;">
+            <datalist id="plaka-suggestions"></datalist>
 
             <label>Yapılan İşlem / Tamir *</label>
             <textarea id="rec-islem" rows="3" placeholder="Yapılan işlemi detaylıca yazın..."></textarea>
@@ -336,7 +376,6 @@
 
             <label id="foto-label">Servis Fotoğrafı (Opsiyonel)</label>
             
-            <!-- MEVCUT FOTOĞRAF ÖNİZLEME VE SİLME ALANI -->
             <div id="photo-preview-box" class="preview-box">
                 <img id="preview-img" class="preview-img" src="" alt="Fotoğraf">
                 <span style="font-size:0.75em; color:#64748b; flex:1; margin-left:8px;">Mevcut Fotoğraf</span>
@@ -349,6 +388,12 @@
             <button onclick="closeModal('record-modal')" style="width:100%; padding:10px; background:#f1f5f9; color:#475569; border:none; border-radius:8px; margin-top:6px; font-weight:bold; cursor:pointer;">İptal</button>
             <div id="record-error" class="error-msg"></div>
         </div>
+    </div>
+
+    <!-- TAM EKRAN FOTOĞRAF MODALI (LIGHTBOX) -->
+    <div id="lightbox-modal" class="lightbox-modal" onclick="closeLightbox()">
+        <span class="lightbox-close">&times;</span>
+        <img id="lightbox-img" class="lightbox-img" src="" alt="Büyütülmüş Fotoğraf">
     </div>
 
     <script>
@@ -389,6 +434,18 @@
             if (!text) return null;
             const match = text.match(/(05\d{2}[-\s]?\d{3}[-\s]?\d{2}[-\s]?\d{2})/);
             return match ? match[0].replace(/[-\s]/g, '') : null;
+        }
+
+        // FOTOĞRAF BÜYÜTME (LIGHTBOX) FONKSİYONLARI
+        function openLightbox(url) {
+            const modal = document.getElementById('lightbox-modal');
+            const img = document.getElementById('lightbox-img');
+            img.src = url;
+            modal.style.display = 'flex';
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox-modal').style.display = 'none';
         }
 
         async function compressImageBrowser(file, maxWidth = 1280, quality = 0.75) {
@@ -663,6 +720,21 @@
             }
         }
 
+        // PLAKA ÖNERİ LİSTESİNİ DOLDURMA
+        function updatePlakaSuggestions() {
+            const datalist = document.getElementById('plaka-suggestions');
+            if (!datalist) return;
+            datalist.innerHTML = '';
+
+            // Tekil plakaları çek
+            const uniquePlakas = [...new Set(allRecords.map(r => r.plaka).filter(Boolean))];
+            uniquePlakas.forEach(plaka => {
+                const option = document.createElement('option');
+                option.value = plaka;
+                datalist.appendChild(option);
+            });
+        }
+
         async function loadRecords() {
             try {
                 const { data, error } = await supabaseClient
@@ -683,6 +755,7 @@
                 const guaranteed = allRecords.filter(r => r.garanti_bitis).length;
                 document.getElementById('guarantee-count').innerText = guaranteed;
 
+                updatePlakaSuggestions(); // Öneri listesini güncelle
                 checkSession();
                 filterRecords();
 
@@ -755,7 +828,7 @@
                         ${item.sofor_bilgi ? `<span class="badge badge-sofor">👤 ${item.sofor_bilgi} ${contactBtns}</span>` : ''}
                     </div>
 
-                    ${item.foto_url ? `<a href="${item.foto_url}" target="_blank"><img src="${item.foto_url}" class="img-thumb" loading="lazy"></a>` : ''}
+                    ${item.foto_url ? `<img src="${item.foto_url}" class="img-thumb" loading="lazy" onclick="openLightbox('${item.foto_url}')">` : ''}
                     ${actionsHtml}
                 `;
                 container.appendChild(card);
