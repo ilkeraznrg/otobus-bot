@@ -53,13 +53,11 @@ def run_health_check_server():
 
 supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
-# Konuşma Adımları (States)
 PLAKA, ISLEM, GARANTI, UCRET, SOFOR, FOTO = range(6)
 
 def format_plaka_standart(raw_text: str) -> str:
     """
-    Kullanıcının girdiği plakayı temizler ve harften sonraki rakamı 4 haneye tamamlar.
-    Örn: '46h94' -> '46 H 0094', '46 h 123' -> '46 H 0123'
+    46h1, 46h01, 46h94 -> 46 H 0001, 46 H 0094
     """
     clean_text = re.sub(r"\s+", "", raw_text.upper())
     plaka_regex = r"^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{1,4})$"
@@ -67,12 +65,12 @@ def format_plaka_standart(raw_text: str) -> str:
     
     if match:
         il, harf, rakam = match.groups()
-        rakam_padded = rakam.zfill(4) # Rakamın solunu 4 haneye tamamlayacak şekilde 0 ekler
+        sadece_rakam = rakam.lstrip('0') or '0'
+        rakam_padded = sadece_rakam.zfill(4)
         return f"{il} {harf} {rakam_padded}"
     return None
 
 def format_date_for_display(date_str: str) -> str:
-    """YYYY-MM-DD formatındaki tarihi GG.AA.YYYY yapar."""
     if not date_str:
         return ""
     if "." in date_str:
@@ -86,15 +84,11 @@ def format_date_for_display(date_str: str) -> str:
     return date_str
 
 def compress_image(image_bytes: bytes) -> bytes:
-    """Fotoğrafı kalitesini bozmadan sıkıştırır ve maksimum boyutlandırır."""
     try:
         img = Image.open(io.BytesIO(image_bytes))
-        
         if img.mode in ("RGBA", "P"):
             img = img.convert("RGB")
-            
         img.thumbnail((1280, 1280))
-        
         output = io.BytesIO()
         img.save(output, format="JPEG", quality=75, optimize=True)
         return output.getvalue()
@@ -110,8 +104,6 @@ def kullanici_yetkili_mi(telegram_id: int) -> bool:
         logger.error(f"Yetki kontrol hatası: {e}")
         return False
 
-
-# --- BOT AÇILIŞINDA TELEGRAM MENÜSÜNE KOMUTLARI EKLEME ---
 async def post_init(application: Application) -> None:
     commands = [
         BotCommand("start", "Botu Başlat ve Menüyü Gör"),
@@ -123,22 +115,15 @@ async def post_init(application: Application) -> None:
     await application.bot.set_my_commands(commands)
     logger.info("Bot komut menüsü Telegram'a kaydedildi.")
 
-
-# --- KULLANICI GİRİŞ VE ÇIKIŞ İŞLEMLERİ ---
-
 async def giris_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     telegram_id = update.effective_user.id
-    
     if kullanici_yetkili_mi(telegram_id):
         await update.message.reply_text("✅ Zaten giriş yapmış durumdasınız. Kayıt oluşturabilirsiniz.")
         return
 
     if len(context.args) < 2:
         await update.message.reply_text(
-            "🔒 **Usta / Yetkili Girişi:**\n\n"
-            "Lütfen komutu kullanıcı adınız ve şifrenizle birlikte yazın:\n"
-            "`/giris kullanici_adi sifre`\n\n"
-            "Örnek: `/giris hasan hasan46.`",
+            "🔒 **Usta / Yetkili Girişi:**\n\n`/giris kullanici_adi sifre`",
             parse_mode="Markdown"
         )
         return
@@ -148,7 +133,6 @@ async def giris_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         res = supabase.table("yetkili_kullanicilar").select("*").eq("kullanici_adi", k_adi).eq("sifre", sifre).execute()
-        
         if res.data:
             user_rec = res.data[0]
             supabase.table("yetkili_kullanicilar").update({"telegram_id": telegram_id}).eq("id", user_rec["id"]).execute()
@@ -160,8 +144,7 @@ async def giris_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
             await update.message.reply_text(
-                f"🎉 Hoş geldiniz **{user_rec.get('ad_soyad') or k_adi}**!\n"
-                f"Giriş başarılı. Artık servis kaydı ekleyebilirsiniz.",
+                f"🎉 Hoş geldiniz **{user_rec.get('ad_soyad') or k_adi}**!\nGiriş başarılı.",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
@@ -171,31 +154,25 @@ async def giris_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Giriş hatası: {e}")
         await update.message.reply_text("❌ Giriş yapılırken bir veritabanı hatası oluştu.")
 
-
 async def cikis_yap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     telegram_id = update.effective_user.id
     try:
         supabase.table("yetkili_kullanicilar").update({"telegram_id": None}).eq("telegram_id", telegram_id).execute()
-        await update.message.reply_text("🔒 Oturumunuz kapatıldı. Artık sadece sorgulama yapabilirsiniz.")
+        await update.message.reply_text("🔒 Oturumunuz kapatıldı.")
     except Exception as e:
         logger.error(f"Çıkış hatası: {e}")
-
-
-# --- KOMUT VE GENEL MESAJ HANDLERLARI ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.effective_user.first_name
     telegram_id = update.effective_user.id
     is_authorized = kullanici_yetkili_mi(telegram_id)
 
-    # Alt Sabit Klavye (Reply Keyboard)
     reply_keyboard = [
         [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
         [KeyboardButton(text="➕ Yeni Servis Kaydı")]
     ]
     reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
 
-    # Mesaj İçi Tıklanabilir Butonlar (Inline Keyboard)
     inline_keyboard = [
         [InlineKeyboardButton("📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))]
     ]
@@ -206,28 +183,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         status_text = "✅ **Usta Girişi Yapılmış Durumda**"
     else:
         inline_keyboard.append([InlineKeyboardButton("🔑 Usta Girişi Yap (/giris)", callback_data="btn_giris_bilgi")])
-        status_text = "ℹ️ **Misafir Modu** (Servis kaydı açmak için usta girişi gereklidir)"
+        status_text = "ℹ️ **Misafir Modu**"
 
     inline_markup = InlineKeyboardMarkup(inline_keyboard)
 
     welcome_text = (
         f"Merhaba **{user_name}**! 🚌\n\n"
         f"Belediye Otobüs Teknik Takip Botuna hoş geldiniz.\n\n"
-        f"• **Plaka Sorgulama:** Sohbet alanına doğrudan tam plaka (`46 H 0123`) veya kısmi numara (`0123`) yazabilirsiniz.\n"
-        f"• **Servis Paneli:** Tüm geçmiş verileri ve fotoğrafları görmek için **'📱 Servis Panelini Aç'** butonunu kullanabilirsiniz.\n\n"
         f"Durum: {status_text}\n\n"
-        f"Hızlı işlem yapmak için aşağıdaki butonları kullanabilirsiniz 👇"
+        f"Aşağıdaki butonları kullanabilirsiniz 👇"
     )
     
     await update.message.reply_text(welcome_text, reply_markup=inline_markup, parse_mode="Markdown")
-    # Kullanıcı ilk açtığında alt menüyü de gösterelim
     await update.message.reply_text("İşlem Menüsü:", reply_markup=reply_markup)
-
 
 async def otobus_detay_goster(message_or_query, plaka: str):
     try:
         otobus_res = supabase.table("otobusler").select("*").eq("plaka", plaka).execute()
-        
         if not otobus_res.data:
             await message_or_query.reply_text(f"⚠️ **{plaka}** plakalı otobüs veritabanında bulunamadı.", parse_mode="Markdown")
             return
@@ -242,9 +214,7 @@ async def otobus_detay_goster(message_or_query, plaka: str):
             .execute()
         )
 
-        msg = f"🚌 ARAÇ BİLGİSİ\n"
-        msg += f"Plaka: {otobus['plaka']}\n"
-        msg += f"───────────────────\n\n"
+        msg = f"🚌 ARAÇ BİLGİSİ\nPlaka: {otobus['plaka']}\n───────────────────\n\n"
 
         if servis_res.data:
             msg += f"🛠 SON SERVİS KAYITLARI:\n\n"
@@ -267,27 +237,18 @@ async def otobus_detay_goster(message_or_query, plaka: str):
     except Exception as e:
         logger.error(f"Sorgu hatası: {e}")
 
-
 async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     raw_text = update.message.text.strip()
-
     if raw_text in ["📱 Servis Panelini Aç", "➕ Yeni Servis Kaydı"]:
         return
 
-    clean_text = re.sub(r"\s+", "", raw_text.upper())
-
-    # 1. Tam Plaka Kontrolü
-    plaka_regex = r"^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{2,4})$"
-    match = re.match(plaka_regex, clean_text)
-
-    if match:
-        il, harf, rakam = match.groups()
-        plaka = f"{il} {harf} {rakam}"
-        await otobus_detay_goster(update.message, plaka)
+    formatted_plaka = format_plaka_standart(raw_text)
+    if formatted_plaka:
+        await otobus_detay_goster(update.message, formatted_plaka)
         return
 
-    # 2. Kısmi Arama
-    if len(clean_text) >= 2 and any(char.isdigit() for char in clean_text):
+    clean_text = re.sub(r"\s+", "", raw_text.upper())
+    if len(clean_text) >= 1 and any(char.isdigit() for char in clean_text):
         try:
             res = supabase.table("otobusler").select("plaka").ilike("plaka", f"%{clean_text}%").limit(5).execute()
             if res.data:
@@ -298,7 +259,7 @@ async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TY
                 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
-                    f"🔍 **'{raw_text}'** aramasıyla eşleşen otobüsler bulundu:\nLütfen bir plaka seçin:",
+                    f"🔍 **'{raw_text}'** aramasıyla eşleşen otobüsler bulundu:",
                     reply_markup=reply_markup,
                     parse_mode="Markdown"
                 )
@@ -306,127 +267,78 @@ async def genel_mesaj_fonsiyonu(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception as e:
             logger.error(f"Kısmi arama hatası: {e}")
 
-    # 3. Rehber Menü
     keyboard = [
         [KeyboardButton(text="📱 Servis Panelini Aç", web_app=WebAppInfo(url=config.WEB_APP_URL))],
         [KeyboardButton(text="➕ Yeni Servis Kaydı")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-
-    rehber_mesaj = (
-        "🤖 **Nasıl Yardımcı Olabilirim?**\n\n"
-        "🔍 **Eski Kayıt Sorgulama:** Tam plaka (`46 H 0123`) veya kısmi numara (`0123`) yazabilirsiniz.\n\n"
-        "🌐 **Tüm Liste & Web Panel:** Geçmiş tüm verileri görmek için **'📱 Servis Panelini Aç'** butonunu kullanın.\n\n"
-        "📝 **Yeni Kayıt Ekleme:** Ustaların kayıt ekleyebilmesi için önce `/giris kullanici_adi sifre` yapması gerekir."
-    )
-
-    await update.message.reply_text(rehber_mesaj, reply_markup=reply_markup, parse_mode="Markdown")
-
+    await update.message.reply_text("🔍 Plaka veya sorgulama metni giriniz.", reply_markup=reply_markup)
 
 async def buton_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
 
     data = query.data
-
     if data.startswith("plaka_sec_"):
         plaka = data.replace("plaka_sec_", "")
         await otobus_detay_goster(query.message, plaka)
-
     elif data == "btn_giris_bilgi":
-        await query.message.reply_text(
-            "🔒 **Usta Girişi Nasıl Yapılır?**\n\n"
-            "Sohbet alanına kullanıcı adınızı ve şifrenizi şu şekilde yazıp gönderin:\n"
-            "`/giris kullanici_adi sifre`\n\n"
-            "*(Örn: `/giris hasan hasan46.`)*",
-            parse_mode="Markdown"
-        )
-
+        await query.message.reply_text("🔒 `/giris kullanici_adi sifre` şeklinde giriş yapın.", parse_mode="Markdown")
     elif data == "btn_yeni_kayit":
         if kullanici_yetkili_mi(query.from_user.id):
-            await query.message.reply_text("📝 Yeni Servis Kaydı\n\nLütfen otobüs plakasını girin (Örn: 46 H 0123):")
-            # Conversation handler başlatmak için komut tetiklemesi yönlendirmesi
-            return
+            await query.message.reply_text("📝 Yeni Servis Kaydı\n\nLütfen otobüs plakasını girin (Örn: 46 H 0123 veya 46H94):")
         else:
-            await query.message.reply_text("🔒 Kayıt ekleyebilmek için lütfen giriş yapın: `/giris kullanici_adi sifre`", parse_mode="Markdown")
-
+            await query.message.reply_text("🔒 Lütfen giriş yapın: `/giris kullanici_adi sifre`", parse_mode="Markdown")
     elif data == "btn_cikis":
         try:
             supabase.table("yetkili_kullanicilar").update({"telegram_id": None}).eq("telegram_id", query.from_user.id).execute()
-            await query.message.reply_text("🔒 Oturumunuz kapatıldı. Artık misafir modundasınız.")
+            await query.message.reply_text("🔒 Oturumunuz kapatıldı.")
         except Exception as e:
             logger.error(f"Çıkış hatası: {e}")
 
-
-# --- SERVİS KAYDI CONVERSATION HANDLER ---
-
 async def kayit_baslat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not kullanici_yetkili_mi(update.effective_user.id):
-        await update.message.reply_text(
-            "🔒 **Yetkisiz İşlem!**\n\n"
-            "Yeni servis kaydı oluşturabilmek için usta girişi yapmalısınız:\n"
-            "`/giris kullanici_adi sifre`\n\n"
-            "*(Örn: `/giris hasan hasan46.`)*", 
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text("🔒 Giriş yapmalısınız: `/giris kullanici_adi sifre`", parse_mode="Markdown")
         return ConversationHandler.END
 
     context.user_data.clear()
-    
     if update.message.photo:
         context.user_data['photo'] = update.message.photo[-1]
-        await update.message.reply_text("📸 Fotoğraf alındı!\n\nLütfen işlem yapılan Otobüs Plakasını girin:")
+        await update.message.reply_text("📸 Fotoğraf alındı!\nLütfen Otobüs Plakasını girin:")
     else:
-        await update.message.reply_text("📝 Yeni Servis Kaydı\n\nLütfen otobüs plakasını girin (Örn: 46 H 0123):")
-    
+        await update.message.reply_text("📝 Yeni Servis Kaydı\n\nLütfen otobüs plakasını girin (Örn: 46 H 0123 veya 46H94):")
     return PLAKA
-
 
 async def kayit_plaka_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     raw_text = update.message.text.strip()
-    clean_text = re.sub(r"\s+", "", raw_text.upper())
+    formatted_plaka = format_plaka_standart(raw_text)
     
-    plaka_regex = r"^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{2,4})$"
-    match = re.match(plaka_regex, clean_text)
-    
-    if not match:
-        await update.message.reply_text(
-            "⚠️ **Geçersiz plaka formatı!**\n\n"
-            "Lütfen geçerli bir otobüs plakası girin (Örn: `46 H 0123` veya `46H0123`):\n"
-            "*(İşlemi iptal etmek için /iptal yazabilirsiniz)*",
-            parse_mode="Markdown"
-        )
+    if not formatted_plaka:
+        await update.message.reply_text("⚠️ Geçersiz plaka formatı! (Örn: 46 H 0123 veya 46H94):")
         return PLAKA
 
-    il, harf, rakam = match.groups()
-    plaka = f"{il} {harf} {rakam}"
-    context.user_data['plaka'] = plaka
+    context.user_data['plaka'] = formatted_plaka
 
     try:
-        res = supabase.table("otobusler").select("plaka").eq("plaka", plaka).execute()
+        res = supabase.table("otobusler").select("plaka").eq("plaka", formatted_plaka).execute()
         if not res.data:
-            supabase.table("otobusler").insert({"plaka": plaka}).execute()
+            supabase.table("otobusler").insert({"plaka": formatted_plaka}).execute()
     except Exception as e:
         logger.error(f"Plaka kontrol hatası: {e}")
 
-    await update.message.reply_text(f"✅ Plaka: **{plaka}**\n\nYapılan teknik işlemi / tamiri detaylıca yazın:", parse_mode="Markdown")
+    await update.message.reply_text(f"✅ Plaka: **{formatted_plaka}**\n\nYapılan teknik işlemi yazın:", parse_mode="Markdown")
     return ISLEM
-
 
 async def kayit_islem_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['islem'] = update.message.text
     await update.message.reply_text(
-        "Garanti bitiş tarihi var mı?\n"
-        "Varsa GG.AA.YYYY formatında yazın (Örn: 31.12.2026).\n"
-        "Yoksa Pas yazın veya aşağıdaki butona basın.",
+        "Garanti bitiş tarihi var mı? (GG.AA.YYYY veya Pas):",
         reply_markup=ReplyKeyboardMarkup([["Pas"]], resize_keyboard=True, one_time_keyboard=True)
     )
     return GARANTI
 
-
 async def kayit_garanti_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
-    
     if text.lower() == "pas":
         context.user_data['garanti'] = None
     else:
@@ -441,15 +353,14 @@ async def kayit_garanti_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if parsed_date:
             context.user_data['garanti'] = str(parsed_date)
         else:
-            await update.message.reply_text("⚠️ Geçersiz tarih formatı! Lütfen GG.AA.YYYY şeklinde girin (Örn: 31.12.2026) veya 'Pas' yazın:")
+            await update.message.reply_text("⚠️ Geçersiz tarih! GG.AA.YYYY veya 'Pas' girin:")
             return GARANTI
 
     await update.message.reply_text(
-        "💰 Alınan servis ücretini yazın (Örn: 1500 TL).\nYoksa 'Pas' yazın veya aşağıdaki butona basın:",
+        "💰 Alınan servis ücretini yazın (Veya Pas):",
         reply_markup=ReplyKeyboardMarkup([["Pas"]], resize_keyboard=True, one_time_keyboard=True)
     )
     return UCRET
-
 
 async def kayit_ucret_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
@@ -459,11 +370,10 @@ async def kayit_ucret_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         context.user_data['ucret'] = text
 
     await update.message.reply_text(
-        "👤 Şoför Adı ve Telefon Numarasını yazın (Örn: Ahmet Yılmaz - 0532 000 0000).\nYoksa 'Pas' yazın:",
+        "👤 Şoför Adı ve İletişim (Veya Pas):",
         reply_markup=ReplyKeyboardMarkup([["Pas"]], resize_keyboard=True, one_time_keyboard=True)
     )
     return SOFOR
-
 
 async def kayit_sofor_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     text = update.message.text.strip()
@@ -474,23 +384,20 @@ async def kayit_sofor_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if 'photo' not in context.user_data:
         await update.message.reply_text(
-            "📷 Servis işlemiyle ilgili bir fotoğraf gönderin veya fotoğraf yoksa Pas yazın:",
+            "📷 Fotoğraf gönderin veya Pas yazın:",
             reply_markup=ReplyKeyboardMarkup([["Pas"]], resize_keyboard=True, one_time_keyboard=True)
         )
         return FOTO
     else:
         return await kayit_tamamla(update, context)
 
-
 async def kayit_foto_al(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.message.photo:
         context.user_data['photo'] = update.message.photo[-1]
-    
     return await kayit_tamamla(update, context)
 
-
 async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("⏳ Kayıt işleniyor ve fotoğraf optimize ediliyor, lütfen bekleyin...")
+    await update.message.reply_text("⏳ Kayıt işleniyor...")
     
     foto_url = None
     photo_item = context.user_data.get('photo')
@@ -499,7 +406,6 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         try:
             file = await context.bot.get_file(photo_item.file_id)
             file_bytes = await file.download_as_bytearray()
-            
             compressed_bytes = compress_image(bytes(file_bytes))
             file_path = f"{context.user_data['plaka']}_{uuid.uuid4().hex[:8]}.jpg"
             
@@ -508,14 +414,12 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                 compressed_bytes,
                 file_options={"content-type": "image/jpeg"}
             )
-            
             foto_url = supabase.storage.from_("servis-fotolari").get_public_url(file_path)
         except Exception as e:
             logger.error(f"Fotoğraf yükleme hatası: {e}")
 
     try:
         bugun_db = datetime.now().strftime("%Y-%m-%d")
-
         kayit_payload = {
             "plaka": context.user_data['plaka'],
             "yapilan_islem": context.user_data['islem'],
@@ -542,11 +446,10 @@ async def kayit_tamamla(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         await update.message.reply_text("🎉 Servis kaydı başarıyla eklendi!", reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"DB Kayıt hatası: {e}")
-        await update.message.reply_text(f"❌ Servis kaydı oluşturulurken hata oluştu: {e}")
+        await update.message.reply_text(f"❌ Hata oluştu: {e}")
 
     context.user_data.clear()
     return ConversationHandler.END
-
 
 async def kayit_iptal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
@@ -557,9 +460,6 @@ async def kayit_iptal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text("❌ İşlem iptal edildi.", reply_markup=reply_markup)
     return ConversationHandler.END
-
-
-# --- MAIN ---
 
 def main():
     Thread(target=run_health_check_server, daemon=True).start()
@@ -595,7 +495,6 @@ def main():
 
     logger.info("Bot ve Sunucu başlatılıyor...")
     app.run_polling(drop_pending_updates=True, poll_interval=1.0)
-
 
 if __name__ == "__main__":
     main()
