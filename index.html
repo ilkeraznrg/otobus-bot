@@ -352,6 +352,43 @@
             return match ? match[0].replace(/[-\s]/g, '') : null;
         }
 
+        // TARAYICI İÇİ OTOMATİK FOTOĞRAF SIKIŞTIRICI (2.5MB -> ~150KB)
+        async function compressImageBrowser(file, maxWidth = 1280, quality = 0.75) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > maxWidth) {
+                            height = Math.round((height * maxWidth) / width);
+                            width = maxWidth;
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        canvas.toBlob((blob) => {
+                            if (blob) {
+                                resolve(blob);
+                            } else {
+                                reject(new Error("Fotoğraf sıkıştırma hatası"));
+                            }
+                        }, 'image/jpeg', quality);
+                    };
+                    img.onerror = (err) => reject(err);
+                };
+                reader.onerror = (err) => reject(err);
+            });
+        }
+
         function checkSession() {
             const savedUser = localStorage.getItem('panel_user');
             const addBtn = document.getElementById('add-record-btn');
@@ -475,7 +512,6 @@
                 return;
             }
 
-            // GÜÇLENDİRİLMİŞ PLAKA DÖNÜŞTÜRÜCÜ (46H1, 46H01, 46H94 -> 46 H 0001 / 0094)
             let cleanPlaka = plakaInput.replace(/\s+/g, '').toUpperCase();
             const match = cleanPlaka.match(/^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{1,4})$/);
 
@@ -491,7 +527,7 @@
             const rakamPadded = sadeceRakam.padStart(4, '0');
 
             const formattedPlaka = `${il} ${harf} ${rakamPadded}`;
-            saveBtn.innerText = "⏳ İşleniyor...";
+            saveBtn.innerText = "⏳ Fotoğraf Optimize Ediliyor...";
             saveBtn.disabled = true;
 
             try {
@@ -502,13 +538,21 @@
 
                 let fotoUrl = null;
                 if (fotoFile) {
+                    // OTOMATİK SIKIŞTIRMA ÇAĞRISI
+                    const compressedBlob = await compressImageBrowser(fotoFile, 1280, 0.75);
                     const filePath = `${formattedPlaka}_${Date.now()}.jpg`;
-                    const { data: stData, error: stErr } = await supabaseClient.storage.from('servis-fotolari').upload(filePath, fotoFile);
+                    
+                    const { data: stData, error: stErr } = await supabaseClient.storage.from('servis-fotolari').upload(filePath, compressedBlob, {
+                        contentType: 'image/jpeg'
+                    });
+                    
                     if (!stErr) {
                         const { data: pUrl } = supabaseClient.storage.from('servis-fotolari').getPublicUrl(filePath);
                         fotoUrl = pUrl.publicUrl;
                     }
                 }
+
+                saveBtn.innerText = "⏳ Kaydediliyor...";
 
                 const payload = {
                     plaka: formattedPlaka,
