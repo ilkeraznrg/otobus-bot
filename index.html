@@ -230,7 +230,36 @@
             font-family: inherit;
             font-size: 0.9em;
         }
-        .modal-content button {
+
+        /* MODAL İÇİ DÜZENLEME FOTOĞRAF ALANI */
+        .preview-box {
+            margin-top: 8px;
+            padding: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .preview-img {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+        .btn-remove-photo {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.75em;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .modal-content button.btn-save {
             width: 100%;
             padding: 12px;
             background: var(--primary);
@@ -277,8 +306,8 @@
             <h3>🔐 Yetkili Usta Girişi</h3>
             <input type="text" id="login-username" placeholder="Kullanıcı Adı">
             <input type="password" id="login-password" placeholder="Şifre">
-            <button onclick="loginUser()">Giriş Yap</button>
-            <button onclick="closeModal('login-modal')" style="background:#f1f5f9; color:#475569; margin-top:6px;">İptal</button>
+            <button class="btn-save" onclick="loginUser()">Giriş Yap</button>
+            <button onclick="closeModal('login-modal')" style="width:100%; padding:10px; background:#f1f5f9; color:#475569; border:none; border-radius:8px; margin-top:6px; font-weight:bold; cursor:pointer;">İptal</button>
             <div id="login-error" class="error-msg">Hatalı kullanıcı adı veya şifre!</div>
         </div>
     </div>
@@ -288,6 +317,7 @@
         <div class="modal-content">
             <h3 id="modal-title">📝 Yeni Servis Kaydı</h3>
             <input type="hidden" id="rec-id">
+            <input type="hidden" id="existing-foto-url">
 
             <label>Otobüs Plakası *</label>
             <input type="text" id="rec-plaka" placeholder="Örn: 46 H 0123 veya 46H94" style="text-transform: uppercase;">
@@ -304,11 +334,19 @@
             <label>Şoför / İletişim Bilgisi (Opsiyonel)</label>
             <input type="text" id="rec-sofor" placeholder="Örn: Ahmet Yılmaz - 0532 000 0000">
 
-            <label>Servis Fotoğrafı (Opsiyonel)</label>
+            <label id="foto-label">Servis Fotoğrafı (Opsiyonel)</label>
+            
+            <!-- MEVCUT FOTOĞRAF ÖNİZLEME VE SİLME ALANI -->
+            <div id="photo-preview-box" class="preview-box">
+                <img id="preview-img" class="preview-img" src="" alt="Fotoğraf">
+                <span style="font-size:0.75em; color:#64748b; flex:1; margin-left:8px;">Mevcut Fotoğraf</span>
+                <button type="button" class="btn-remove-photo" onclick="removeCurrentPhoto()">🗑️ Fotoğrafı Sil</button>
+            </div>
+
             <input type="file" id="rec-foto" accept="image/*">
 
-            <button id="save-btn" onclick="saveRecord()">💾 Kaydet</button>
-            <button onclick="closeModal('record-modal')" style="background:#f1f5f9; color:#475569; margin-top:6px;">İptal</button>
+            <button id="save-btn" class="btn-save" onclick="saveRecord()">💾 Kaydet</button>
+            <button onclick="closeModal('record-modal')" style="width:100%; padding:10px; background:#f1f5f9; color:#475569; border:none; border-radius:8px; margin-top:6px; font-weight:bold; cursor:pointer;">İptal</button>
             <div id="record-error" class="error-msg"></div>
         </div>
     </div>
@@ -321,6 +359,7 @@
         let allRecords = [];
         let isLoggedIn = false;
         let currentFilter = 'all';
+        let isPhotoDeletedInModal = false;
 
         const INACTIVITY_LIMIT = 15 * 60 * 1000;
         let inactivityTimer;
@@ -352,7 +391,6 @@
             return match ? match[0].replace(/[-\s]/g, '') : null;
         }
 
-        // TARAYICI İÇİ OTOMATİK FOTOĞRAF SIKIŞTIRICI (2.5MB -> ~150KB)
         async function compressImageBrowser(file, maxWidth = 1280, quality = 0.75) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -376,11 +414,8 @@
                         ctx.drawImage(img, 0, 0, width, height);
 
                         canvas.toBlob((blob) => {
-                            if (blob) {
-                                resolve(blob);
-                            } else {
-                                reject(new Error("Fotoğraf sıkıştırma hatası"));
-                            }
+                            if (blob) resolve(blob);
+                            else reject(new Error("Fotoğraf sıkıştırma hatası"));
                         }, 'image/jpeg', quality);
                     };
                     img.onerror = (err) => reject(err);
@@ -432,12 +467,17 @@
         function openAddRecordModal() {
             document.getElementById('modal-title').innerText = "📝 Yeni Servis Kaydı";
             document.getElementById('rec-id').value = "";
+            document.getElementById('existing-foto-url').value = "";
             document.getElementById('rec-plaka').value = "";
             document.getElementById('rec-islem').value = "";
             document.getElementById('rec-garanti').value = "";
             document.getElementById('rec-ucret').value = "";
             document.getElementById('rec-sofor').value = "";
             document.getElementById('rec-foto').value = "";
+            document.getElementById('photo-preview-box').style.display = 'none';
+            document.getElementById('foto-label').innerText = "Servis Fotoğrafı (Opsiyonel)";
+            isPhotoDeletedInModal = false;
+
             document.getElementById('record-modal').style.display = 'flex';
             document.getElementById('record-error').style.display = 'none';
         }
@@ -448,15 +488,33 @@
 
             document.getElementById('modal-title').innerText = "✏️ Kaydı Düzenle";
             document.getElementById('rec-id').value = item.id;
+            document.getElementById('existing-foto-url').value = item.foto_url || "";
             document.getElementById('rec-plaka').value = item.plaka || "";
             document.getElementById('rec-islem').value = item.yapilan_islem || "";
             document.getElementById('rec-garanti').value = item.garanti_bitis || "";
             document.getElementById('rec-ucret').value = item.ucret || "";
             document.getElementById('rec-sofor').value = item.sofor_bilgi || "";
             document.getElementById('rec-foto').value = "";
-            
+            isPhotoDeletedInModal = false;
+
+            if (item.foto_url) {
+                document.getElementById('preview-img').src = item.foto_url;
+                document.getElementById('photo-preview-box').style.display = 'flex';
+                document.getElementById('foto-label').innerText = "Yeni Fotoğraf Yükle (Eskisiyle Değiştirir)";
+            } else {
+                document.getElementById('photo-preview-box').style.display = 'none';
+                document.getElementById('foto-label').innerText = "Servis Fotoğrafı (Opsiyonel)";
+            }
+
             document.getElementById('record-modal').style.display = 'flex';
             document.getElementById('record-error').style.display = 'none';
+        }
+
+        function removeCurrentPhoto() {
+            isPhotoDeletedInModal = true;
+            document.getElementById('photo-preview-box').style.display = 'none';
+            document.getElementById('existing-foto-url').value = "";
+            document.getElementById('foto-label').innerText = "Servis Fotoğrafı (Opsiyonel)";
         }
 
         function setFilter(type) {
@@ -497,6 +555,7 @@
 
         async function saveRecord() {
             const recId = document.getElementById('rec-id').value;
+            const existingFotoUrl = document.getElementById('existing-foto-url').value;
             const plakaInput = document.getElementById('rec-plaka').value.trim();
             const islem = document.getElementById('rec-islem').value.trim();
             const garanti = document.getElementById('rec-garanti').value;
@@ -527,7 +586,7 @@
             const rakamPadded = sadeceRakam.padStart(4, '0');
 
             const formattedPlaka = `${il} ${harf} ${rakamPadded}`;
-            saveBtn.innerText = "⏳ Fotoğraf Optimize Ediliyor...";
+            saveBtn.innerText = "⏳ İşleniyor...";
             saveBtn.disabled = true;
 
             try {
@@ -536,9 +595,14 @@
                     await supabaseClient.from('otobusler').insert([{ plaka: formattedPlaka }]);
                 }
 
-                let fotoUrl = null;
+                let finalFotoUrl = existingFotoUrl;
+
+                if (isPhotoDeletedInModal) {
+                    finalFotoUrl = null;
+                }
+
                 if (fotoFile) {
-                    // OTOMATİK SIKIŞTIRMA ÇAĞRISI
+                    saveBtn.innerText = "⏳ Fotoğraf Optimize Ediliyor...";
                     const compressedBlob = await compressImageBrowser(fotoFile, 1280, 0.75);
                     const filePath = `${formattedPlaka}_${Date.now()}.jpg`;
                     
@@ -548,7 +612,7 @@
                     
                     if (!stErr) {
                         const { data: pUrl } = supabaseClient.storage.from('servis-fotolari').getPublicUrl(filePath);
-                        fotoUrl = pUrl.publicUrl;
+                        finalFotoUrl = pUrl.publicUrl;
                     }
                 }
 
@@ -559,12 +623,9 @@
                     yapilan_islem: islem,
                     garanti_bitis: garanti || null,
                     ucret: ucret || null,
-                    sofor_bilgi: sofor || null
+                    sofor_bilgi: sofor || null,
+                    foto_url: finalFotoUrl
                 };
-
-                if (fotoUrl) {
-                    payload.foto_url = fotoUrl;
-                }
 
                 if (recId) {
                     const { error: updErr } = await supabaseClient.from('servis_kayitlari').update(payload).eq('id', recId);
