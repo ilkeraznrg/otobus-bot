@@ -3,15 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=no">
-    <title>Otobüs Servis Paneli</title>
+    <title>Servis Takip Paneli</title>
     
-    <!-- PWA Bağlantıları -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#1e293b">
+    <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Servis Paneli">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3448/3448339.png">
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -19,183 +16,184 @@
     <style>
         :root {
             --primary: #2563eb;
-            --primary-dark: #1d4ed8;
+            --primary-hover: #1d4ed8;
             --bg: #f8fafc;
-            --card-bg: #ffffff;
+            --surface: #ffffff;
             --text-main: #0f172a;
             --text-muted: #64748b;
-            --success: #10b981;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --whatsapp: #25d366;
             --border: #e2e8f0;
+            --border-hover: #cbd5e1;
+            --danger: #ef4444;
+            --success: #10b981;
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, sans-serif;
             background-color: var(--bg);
             margin: 0;
-            padding: 0 0 30px 0;
+            padding: 0 0 40px 0;
             color: var(--text-main);
+            -webkit-font-smoothing: antialiased;
         }
 
+        /* HEADER */
         .header { 
             background: #0f172a;
             color: white;
-            padding: 16px;
+            padding: 16px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid var(--border);
         }
-        .header h2 { margin: 0; font-size: 1.15em; font-weight: 700; }
+        .header-title { margin: 0; font-size: 1em; font-weight: 600; letter-spacing: -0.01em; }
         
         .btn-auth {
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.1);
             color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 8px 14px;
-            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 6px 14px;
+            border-radius: 6px;
             font-size: 0.8em;
             cursor: pointer;
-            font-weight: 600;
+            font-weight: 500;
+            transition: all 0.2s;
         }
+        .btn-auth:hover { background: rgba(255, 255, 255, 0.2); }
         .btn-auth.logout { background: #dc2626; border-color: #dc2626; }
 
-        .container { padding: 12px; }
+        .container { padding: 16px; max-width: 600px; margin: 0 auto; }
 
-        .btn-add-record {
+        /* BUTONLAR */
+        .btn-primary {
             width: 100%;
-            background: var(--success);
+            background: var(--primary);
             color: white;
             border: none;
-            padding: 14px;
-            border-radius: 10px;
-            font-weight: 700;
-            font-size: 0.95em;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.88em;
             cursor: pointer;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
             display: none;
             text-align: center;
         }
 
-        .stats-bar { display: flex; gap: 10px; margin-bottom: 12px; }
+        /* ISTATISTIK BARI */
+        .stats-bar { display: flex; gap: 10px; margin-bottom: 16px; }
         .stat-card {
             flex: 1;
-            background: var(--card-bg);
-            padding: 12px 8px;
-            border-radius: 10px;
+            background: var(--surface);
+            padding: 12px;
+            border-radius: 8px;
             text-align: center;
             border: 1px solid var(--border);
             cursor: pointer;
-            user-select: none;
+            transition: border-color 0.2s;
         }
-        .stat-card.active { border-color: var(--primary); background: #eff6ff; }
-        .stat-card.active-guarantee { border-color: var(--success); background: #ecfdf5; }
-        .stat-val { font-size: 1.3em; font-weight: 800; color: var(--primary); }
-        .stat-lbl { font-size: 0.72em; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-top: 2px; }
+        .stat-card.active { border-color: var(--primary); background: #f0f6ff; }
+        .stat-val { font-size: 1.2em; font-weight: 700; color: var(--text-main); }
+        .stat-lbl { font-size: 0.7em; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-top: 2px; }
 
+        /* ARAMA KUTUSU */
         .search-box {
             width: 100%;
-            padding: 12px 16px;
+            padding: 11px 14px;
             border: 1px solid var(--border);
-            border-radius: 10px;
-            font-size: 0.9em;
-            box-sizing: border-box;
-            margin-bottom: 14px;
+            border-radius: 8px;
+            font-size: 0.88em;
+            margin-bottom: 16px;
             outline: none;
-            background: white;
+            background: var(--surface);
+            color: var(--text-main);
         }
         .search-box:focus { border-color: var(--primary); }
 
-        /* AKORDEON / KATLANABİLİR KART YAPISI */
+        /* KART YAPISI (SADE & MODERN) */
         .card {
-            background: var(--card-bg);
-            border-radius: 10px;
+            background: var(--surface);
+            border-radius: 8px;
             margin-bottom: 8px;
             border: 1px solid var(--border);
             overflow: hidden;
+            transition: border-color 0.2s;
         }
 
-        /* KAPALI BİLGİ SATIRI (BAŞLIK) */
         .card-summary {
             padding: 12px 14px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            cursor: pointer;
             user-select: none;
-            background: white;
         }
-        .card-summary:active { background: #f8fafc; }
+        .card-summary.clickable { cursor: pointer; }
+        .card-summary.clickable:active { background: #f8fafc; }
 
-        .summary-left { display: flex; align-items: center; gap: 8px; flex: 1; overflow: hidden; }
+        .summary-left { display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden; }
         
         .plaka-badge {
-            background: #facc15;
-            color: #000;
-            padding: 3px 8px;
-            border-radius: 5px;
-            font-weight: 800;
-            font-size: 0.85em;
-            border: 1px solid #000;
+            background: #f1f5f9;
+            color: #0f172a;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.8em;
+            border: 1px solid #cbd5e1;
             white-space: nowrap;
+            letter-spacing: 0.5px;
         }
 
         .summary-title {
-            font-size: 0.88em;
-            font-weight: 600;
-            color: #1e293b;
+            font-size: 0.85em;
+            font-weight: 500;
+            color: #334155;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
-        .summary-right { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+        .summary-right { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
         .tarih { font-size: 0.75em; color: var(--text-muted); font-weight: 500; }
-        .arrow-icon { font-size: 0.8em; color: var(--text-muted); transition: transform 0.2s; }
+        .arrow-icon { font-size: 0.7em; color: var(--text-muted); transition: transform 0.2s; }
 
-        /* AÇILIR DETAY ALANI */
+        /* DETAY PANELİ (SADECE GİRİŞ YAPANLARA ÖZEL) */
         .card-details {
             display: none;
             padding: 14px;
-            background: #f8fafc;
+            background: #fafafa;
             border-top: 1px solid var(--border);
         }
 
-        .islem-text { font-size: 0.9em; color: #1e293b; margin-bottom: 10px; line-height: 1.45; font-weight: 500; }
+        .detail-row { font-size: 0.85em; color: #334155; margin-bottom: 8px; line-height: 1.5; }
+        .detail-label { font-weight: 600; color: #0f172a; }
 
-        .badges-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+        .badges-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
         .badge {
             padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 0.75em;
-            font-weight: 600;
-        }
-        .badge-ucret { background: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; }
-        .badge-garanti { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
-        .badge-sofor { background: #ffffff; color: #475569; border: 1px solid var(--border); }
-
-        .contact-actions { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
-        .btn-call, .btn-wp {
-            padding: 2px 6px;
             border-radius: 4px;
             font-size: 0.75em;
-            text-decoration: none;
-            color: white;
-            font-weight: bold;
+            font-weight: 500;
+            background: #fff;
+            border: 1px solid var(--border);
+            color: #475569;
         }
-        .btn-call { background: var(--primary); }
-        .btn-wp { background: var(--whatsapp); }
 
-        .img-thumb-container { margin-top: 10px; }
+        .contact-links { display: inline-flex; gap: 8px; margin-left: 6px; }
+        .contact-link {
+            font-size: 0.75em;
+            text-decoration: none;
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .img-container { margin-top: 12px; }
         .img-thumb {
             width: 100%;
-            max-height: 200px;
+            max-height: 220px;
             object-fit: cover;
-            border-radius: 8px;
+            border-radius: 6px;
             cursor: pointer;
             border: 1px solid var(--border);
         }
@@ -203,31 +201,32 @@
         .card-actions {
             display: flex;
             gap: 8px;
-            margin-top: 12px;
+            margin-top: 14px;
             padding-top: 10px;
-            border-top: 1px dashed var(--border);
+            border-top: 1px solid var(--border);
         }
         .btn-action {
             flex: 1;
             padding: 8px;
-            border: none;
+            border: 1px solid var(--border);
             border-radius: 6px;
-            font-size: 0.8em;
+            font-size: 0.78em;
             font-weight: 600;
             cursor: pointer;
+            background: white;
+            color: var(--text-main);
         }
-        .btn-edit { background: #eff6ff; color: #1d4ed8; }
-        .btn-delete { background: #fef2f2; color: #dc2626; }
+        .btn-delete { color: var(--danger); border-color: #fecaca; background: #fef2f2; }
 
-        .loader { text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.9em; }
+        .loader { text-align: center; padding: 20px; color: var(--text-muted); font-size: 0.85em; }
 
         /* MODAL STİLLERİ */
         .modal {
             display: none;
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(4px);
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(2px);
             justify-content: center;
             align-items: center;
             z-index: 1000;
@@ -235,111 +234,94 @@
         .modal-content {
             background: white;
             padding: 20px;
-            border-radius: 14px;
+            border-radius: 10px;
             width: 90%;
             max-width: 360px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-            max-height: 88vh;
+            border: 1px solid var(--border);
+            max-height: 90vh;
             overflow-y: auto;
         }
-        .modal-content h3 { margin-top: 0; margin-bottom: 12px; font-size: 1.1em; color: #0f172a; }
-        .modal-content label { font-size: 0.8em; font-weight: 700; color: #475569; display: block; margin-top: 10px; }
+        .modal-content h3 { margin-top: 0; margin-bottom: 14px; font-size: 1em; font-weight: 600; }
+        .modal-content label { font-size: 0.75em; font-weight: 600; color: #475569; display: block; margin-top: 10px; }
         .modal-content input, .modal-content textarea {
             width: 100%;
-            padding: 10px;
+            padding: 9px 11px;
             margin-top: 4px;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            box-sizing: border-box;
+            border: 1px solid var(--border);
+            border-radius: 6px;
             font-family: inherit;
-            font-size: 0.9em;
+            font-size: 0.85em;
+            outline: none;
         }
+        .modal-content input:focus, .modal-content textarea:focus { border-color: var(--primary); }
 
         .preview-box {
             margin-top: 8px;
             padding: 8px;
             background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
             display: none;
             align-items: center;
             justify-content: space-between;
         }
-        .preview-img {
-            width: 50px;
-            height: 50px;
-            object-fit: cover;
-            border-radius: 6px;
-        }
+        .preview-img { width: 44px; height: 44px; object-fit: cover; border-radius: 4px; }
         .btn-remove-photo {
-            background: #fef2f2;
-            color: #dc2626;
-            border: 1px solid #fecaca;
-            padding: 6px 10px;
-            border-radius: 6px;
+            background: transparent;
+            color: var(--danger);
+            border: none;
             font-size: 0.75em;
-            font-weight: bold;
+            font-weight: 600;
             cursor: pointer;
         }
 
-        .modal-content button.btn-save {
+        .btn-save {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             background: var(--primary);
             color: white;
             border: none;
-            border-radius: 8px;
-            font-weight: 700;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.85em;
             cursor: pointer;
             margin-top: 14px;
         }
-        .error-msg { color: var(--danger); font-size: 0.8em; margin-top: 6px; display: none; }
+        .btn-cancel {
+            width: 100%;
+            padding: 9px;
+            background: transparent;
+            color: var(--text-muted);
+            border: none;
+            margin-top: 4px;
+            font-size: 0.8em;
+            cursor: pointer;
+        }
+        .error-msg { color: var(--danger); font-size: 0.75em; margin-top: 6px; display: none; }
 
-        /* LIGHTBOX (TAM EKRAN FOTOĞRAF) */
+        /* LIGHTBOX */
         .lightbox-modal {
             display: none;
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.85);
             z-index: 2000;
             justify-content: center;
             align-items: center;
             padding: 10px;
         }
-        .lightbox-img {
-            max-width: 100%;
-            max-height: 90vh;
-            border-radius: 8px;
-            object-fit: contain;
-        }
-        .lightbox-close {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            color: white;
-            font-size: 30px;
-            font-weight: bold;
-            cursor: pointer;
-            background: rgba(255, 255, 255, 0.2);
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            user-select: none;
-        }
+        .lightbox-img { max-width: 100%; max-height: 90vh; border-radius: 6px; object-fit: contain; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h2>🚌 Servis Takip</h2>
-        <button id="auth-btn" class="btn-auth" onclick="handleAuthClick()">🔑 Usta Girişi</button>
+        <h2 class="header-title">Servis Takip Paneli</h2>
+        <button id="auth-btn" class="btn-auth" onclick="handleAuthClick()">Usta Girişi</button>
     </div>
 
     <div class="container">
-        <button id="add-record-btn" class="btn-add-record" onclick="openAddRecordModal()">➕ Yeni Servis Kaydı Ekle</button>
+        <button id="add-record-btn" class="btn-primary" onclick="openAddRecordModal()">+ Yeni Servis Kaydı Ekle</button>
 
         <div class="stats-bar">
             <div class="stat-card active" id="card-total" onclick="setFilter('all')">
@@ -347,72 +329,68 @@
                 <div class="stat-lbl">Tüm Kayıtlar</div>
             </div>
             <div class="stat-card" id="card-guarantee" onclick="setFilter('guarantee')">
-                <div class="stat-val" id="guarantee-count" style="color: var(--success);">0</div>
-                <div class="stat-lbl">Garantili Parçalar</div>
+                <div class="stat-val" id="guarantee-count">0</div>
+                <div class="stat-lbl">Garantililer</div>
             </div>
         </div>
 
-        <input type="text" id="search-input" class="search-box" placeholder="🔍 Plaka, şoför veya işlem ara..." onkeyup="filterRecords()">
+        <input type="text" id="search-input" class="search-box" placeholder="Plaka, şoför veya işlem ara..." onkeyup="filterRecords()">
 
         <div id="loading" class="loader">Kayıtlar yükleniyor...</div>
         <div id="records-list"></div>
     </div>
 
-    <!-- GİRİŞ MODAL -->
     <div id="login-modal" class="modal">
         <div class="modal-content">
-            <h3>🔐 Yetkili Usta Girişi</h3>
+            <h3>Usta Girişi</h3>
             <input type="text" id="login-username" placeholder="Kullanıcı Adı">
             <input type="password" id="login-password" placeholder="Şifre">
             <button class="btn-save" onclick="loginUser()">Giriş Yap</button>
-            <button onclick="closeModal('login-modal')" style="width:100%; padding:10px; background:#f1f5f9; color:#475569; border:none; border-radius:8px; margin-top:6px; font-weight:bold; cursor:pointer;">İptal</button>
+            <button class="btn-cancel" onclick="closeModal('login-modal')">İptal</button>
             <div id="login-error" class="error-msg">Hatalı kullanıcı adı veya şifre!</div>
         </div>
     </div>
 
-    <!-- EKLEME / DÜZENLEME MODAL -->
     <div id="record-modal" class="modal">
         <div class="modal-content">
-            <h3 id="modal-title">📝 Yeni Servis Kaydı</h3>
+            <h3 id="modal-title">Yeni Servis Kaydı</h3>
             <input type="hidden" id="rec-id">
             <input type="hidden" id="existing-foto-url">
 
             <label>Otobüs Plakası *</label>
-            <input type="text" id="rec-plaka" list="plaka-suggestions" placeholder="Örn: 46 H 0123 veya 46H94" style="text-transform: uppercase;">
+            <input type="text" id="rec-plaka" list="plaka-suggestions" placeholder="Örn: 46 H 0123" style="text-transform: uppercase;">
             <datalist id="plaka-suggestions"></datalist>
 
-            <label>Yapılan İşlem / Tamir *</label>
-            <textarea id="rec-islem" rows="3" placeholder="Yapılan işlemi detaylıca yazın..."></textarea>
+            <label>Yapılan İşlem *</label>
+            <textarea id="rec-islem" rows="3" placeholder="Yapılan işlemi yazın..."></textarea>
 
-            <label>Garanti Bitiş Tarihi (Opsiyonel)</label>
+            <label>Garanti Bitiş Tarihi</label>
             <input type="date" id="rec-garanti">
 
-            <label>Alınan Ücret (Opsiyonel)</label>
+            <label>Alınan Ücret</label>
             <input type="text" id="rec-ucret" placeholder="Örn: 1500 TL">
 
-            <label>Şoför / İletişim Bilgisi (Opsiyonel)</label>
+            <label>Şoför / İletişim Bilgisi</label>
             <input type="text" id="rec-sofor" placeholder="Örn: Ahmet Yılmaz - 0532 000 0000">
 
-            <label id="foto-label">Servis Fotoğrafı (Opsiyonel)</label>
+            <label id="foto-label">Servis Fotoğrafı</label>
             
             <div id="photo-preview-box" class="preview-box">
                 <img id="preview-img" class="preview-img" src="" alt="Fotoğraf">
                 <span style="font-size:0.75em; color:#64748b; flex:1; margin-left:8px;">Mevcut Fotoğraf</span>
-                <button type="button" class="btn-remove-photo" onclick="removeCurrentPhoto()">🗑️ Fotoğrafı Sil</button>
+                <button type="button" class="btn-remove-photo" onclick="removeCurrentPhoto()">Kaldır</button>
             </div>
 
             <input type="file" id="rec-foto" accept="image/*">
 
-            <button id="save-btn" class="btn-save" onclick="saveRecord()">💾 Kaydet</button>
-            <button onclick="closeModal('record-modal')" style="width:100%; padding:10px; background:#f1f5f9; color:#475569; border:none; border-radius:8px; margin-top:6px; font-weight:bold; cursor:pointer;">İptal</button>
+            <button id="save-btn" class="btn-save" onclick="saveRecord()">Kaydet</button>
+            <button class="btn-cancel" onclick="closeModal('record-modal')">İptal</button>
             <div id="record-error" class="error-msg"></div>
         </div>
     </div>
 
-    <!-- TAM EKRAN FOTOĞRAF MODALI (LIGHTBOX) -->
     <div id="lightbox-modal" class="lightbox-modal" onclick="closeLightbox()">
-        <span class="lightbox-close">&times;</span>
-        <img id="lightbox-img" class="lightbox-img" src="" alt="Büyütülmüş Fotoğraf">
+        <img id="lightbox-img" class="lightbox-img" src="" alt="Fotoğraf">
     </div>
 
     <script>
@@ -432,7 +410,7 @@
             clearTimeout(inactivityTimer);
             if (isLoggedIn) {
                 inactivityTimer = setTimeout(() => {
-                    logoutUser("Uzun süre işlem yapılmadığı için oturumunuz kapatıldı.");
+                    logoutUser("Oturum süreniz doldu.");
                 }, INACTIVITY_LIMIT);
             }
         }
@@ -456,10 +434,8 @@
         }
 
         function openLightbox(url) {
-            const modal = document.getElementById('lightbox-modal');
-            const img = document.getElementById('lightbox-img');
-            img.src = url;
-            modal.style.display = 'flex';
+            document.getElementById('lightbox-img').src = url;
+            document.getElementById('lightbox-modal').style.display = 'flex';
         }
 
         function closeLightbox() {
@@ -476,38 +452,32 @@
                     img.onload = () => {
                         let width = img.width;
                         let height = img.height;
-
                         if (width > maxWidth) {
                             height = Math.round((height * maxWidth) / width);
                             width = maxWidth;
                         }
-
                         const canvas = document.createElement('canvas');
                         canvas.width = width;
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
-
-                        canvas.toBlob((blob) => {
-                            if (blob) resolve(blob);
-                            else reject(new Error("Fotoğraf sıkıştırma hatası"));
-                        }, 'image/jpeg', quality);
+                        canvas.toBlob((blob) => resolve(blob), 'image/jpeg', quality);
                     };
-                    img.onerror = (err) => reject(err);
                 };
-                reader.onerror = (err) => reject(err);
             });
         }
 
         function toggleCard(id) {
+            if (!isLoggedIn) return; // Giriş yapmayan kullanıcı kartı açamaz
+            
             const details = document.getElementById(`details-${id}`);
             const arrow = document.getElementById(`arrow-${id}`);
             if (details.style.display === 'block') {
                 details.style.display = 'none';
-                arrow.innerText = '▼';
+                if (arrow) arrow.innerText = '▼';
             } else {
                 details.style.display = 'block';
-                arrow.innerText = '▲';
+                if (arrow) arrow.innerText = '▲';
             }
         }
 
@@ -518,15 +488,15 @@
             
             if (savedUser) {
                 isLoggedIn = true;
-                authBtn.innerText = '🚪 Çıkış Yap';
+                authBtn.innerText = 'Çıkış Yap';
                 authBtn.classList.add('logout');
-                if (addBtn) addBtn.style.setProperty('display', 'block', 'important');
+                if (addBtn) addBtn.style.display = 'block';
                 resetInactivityTimer();
             } else {
                 isLoggedIn = false;
-                authBtn.innerText = '🔑 Usta Girişi';
+                authBtn.innerText = 'Usta Girişi';
                 authBtn.classList.remove('logout');
-                if (addBtn) addBtn.style.setProperty('display', 'none', 'important');
+                if (addBtn) addBtn.style.display = 'none';
                 clearTimeout(inactivityTimer);
             }
         }
@@ -552,7 +522,7 @@
         }
 
         function openAddRecordModal() {
-            document.getElementById('modal-title').innerText = "📝 Yeni Servis Kaydı";
+            document.getElementById('modal-title').innerText = "Yeni Servis Kaydı";
             document.getElementById('rec-id').value = "";
             document.getElementById('existing-foto-url').value = "";
             document.getElementById('rec-plaka').value = "";
@@ -562,7 +532,6 @@
             document.getElementById('rec-sofor').value = "";
             document.getElementById('rec-foto').value = "";
             document.getElementById('photo-preview-box').style.display = 'none';
-            document.getElementById('foto-label').innerText = "Servis Fotoğrafı (Opsiyonel)";
             isPhotoDeletedInModal = false;
 
             document.getElementById('record-modal').style.display = 'flex';
@@ -573,7 +542,7 @@
             const item = allRecords.find(r => r.id === id);
             if (!item) return;
 
-            document.getElementById('modal-title').innerText = "✏️ Kaydı Düzenle";
+            document.getElementById('modal-title').innerText = "Kaydı Düzenle";
             document.getElementById('rec-id').value = item.id;
             document.getElementById('existing-foto-url').value = item.foto_url || "";
             document.getElementById('rec-plaka').value = item.plaka || "";
@@ -587,10 +556,8 @@
             if (item.foto_url) {
                 document.getElementById('preview-img').src = item.foto_url;
                 document.getElementById('photo-preview-box').style.display = 'flex';
-                document.getElementById('foto-label').innerText = "Yeni Fotoğraf Yükle (Eskisiyle Değiştirir)";
             } else {
                 document.getElementById('photo-preview-box').style.display = 'none';
-                document.getElementById('foto-label').innerText = "Servis Fotoğrafı (Opsiyonel)";
             }
 
             document.getElementById('record-modal').style.display = 'flex';
@@ -601,22 +568,12 @@
             isPhotoDeletedInModal = true;
             document.getElementById('photo-preview-box').style.display = 'none';
             document.getElementById('existing-foto-url').value = "";
-            document.getElementById('foto-label').innerText = "Servis Fotoğrafı (Opsiyonel)";
         }
 
         function setFilter(type) {
             currentFilter = type;
-            const cardTotal = document.getElementById('card-total');
-            const cardGuarantee = document.getElementById('card-guarantee');
-
-            if (type === 'all') {
-                cardTotal.className = 'stat-card active';
-                cardGuarantee.className = 'stat-card';
-            } else if (type === 'guarantee') {
-                cardTotal.className = 'stat-card';
-                cardGuarantee.className = 'stat-card active-guarantee';
-            }
-
+            document.getElementById('card-total').className = type === 'all' ? 'stat-card active' : 'stat-card';
+            document.getElementById('card-guarantee').className = type === 'guarantee' ? 'stat-card active' : 'stat-card';
             filterRecords();
         }
 
@@ -624,7 +581,7 @@
             const kAdi = document.getElementById('login-username').value.trim();
             const sifre = document.getElementById('login-password').value.trim();
 
-            const { data, error } = await supabaseClient
+            const { data } = await supabaseClient
                 .from('yetkili_kullanicilar')
                 .select('*')
                 .eq('kullanici_adi', kAdi)
@@ -662,18 +619,13 @@
             const match = cleanPlaka.match(/^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{1,4})$/);
 
             if (!match) {
-                errDiv.innerText = "Geçersiz plaka formatı! (Örn: 46 H 0123 veya 46H94)";
+                errDiv.innerText = "Geçersiz plaka formatı!";
                 errDiv.style.display = 'block';
                 return;
             }
 
-            const il = match[1];
-            const harf = match[2];
-            const sadeceRakam = match[3].replace(/^0+/, '') || '0';
-            const rakamPadded = sadeceRakam.padStart(4, '0');
-
-            const formattedPlaka = `${il} ${harf} ${rakamPadded}`;
-            saveBtn.innerText = "⏳ İşleniyor...";
+            const formattedPlaka = `${match[1]} ${match[2]} ${match[3].replace(/^0+/, '').padStart(4, '0')}`;
+            saveBtn.innerText = "İşleniyor...";
             saveBtn.disabled = true;
 
             try {
@@ -682,28 +634,19 @@
                     await supabaseClient.from('otobusler').insert([{ plaka: formattedPlaka }]);
                 }
 
-                let finalFotoUrl = existingFotoUrl;
-
-                if (isPhotoDeletedInModal) {
-                    finalFotoUrl = null;
-                }
+                let finalFotoUrl = isPhotoDeletedInModal ? null : existingFotoUrl;
 
                 if (fotoFile) {
-                    saveBtn.innerText = "⏳ Fotoğraf Optimize Ediliyor...";
                     const compressedBlob = await compressImageBrowser(fotoFile, 1280, 0.75);
                     const filePath = `${formattedPlaka}_${Date.now()}.jpg`;
                     
-                    const { data: stData, error: stErr } = await supabaseClient.storage.from('servis-fotolari').upload(filePath, compressedBlob, {
-                        contentType: 'image/jpeg'
-                    });
+                    const { error: stErr } = await supabaseClient.storage.from('servis-fotolari').upload(filePath, compressedBlob, { contentType: 'image/jpeg' });
                     
                     if (!stErr) {
                         const { data: pUrl } = supabaseClient.storage.from('servis-fotolari').getPublicUrl(filePath);
                         finalFotoUrl = pUrl.publicUrl;
                     }
                 }
-
-                saveBtn.innerText = "⏳ Kaydediliyor...";
 
                 const payload = {
                     plaka: formattedPlaka,
@@ -715,46 +658,34 @@
                 };
 
                 if (recId) {
-                    const { error: updErr } = await supabaseClient.from('servis_kayitlari').update(payload).eq('id', recId);
-                    if (updErr) throw updErr;
+                    await supabaseClient.from('servis_kayitlari').update(payload).eq('id', recId);
                 } else {
                     payload.tarih = new Date().toISOString().split('T')[0];
-                    const { error: insErr } = await supabaseClient.from('servis_kayitlari').insert([payload]);
-                    if (insErr) throw insErr;
+                    await supabaseClient.from('servis_kayitlari').insert([payload]);
                 }
 
                 closeModal('record-modal');
                 loadRecords();
 
             } catch (err) {
-                console.error(err);
                 errDiv.innerText = "Hata oluştu: " + err.message;
                 errDiv.style.display = 'block';
             } finally {
-                saveBtn.innerText = "💾 Kaydet";
+                saveBtn.innerText = "Kaydet";
                 saveBtn.disabled = false;
             }
         }
 
         async function deleteRecord(id, plaka) {
-            if (!confirm(`${plaka} plakalı bu servis kaydını silmek istediğinize emin misiniz?`)) {
-                return;
-            }
-
-            try {
-                const { error } = await supabaseClient.from('servis_kayitlari').delete().eq('id', id);
-                if (error) throw error;
-                loadRecords();
-            } catch (err) {
-                alert("Silinirken hata oluştu: " + err.message);
-            }
+            if (!confirm(`${plaka} plakalı bu kaydı silmek istediğinize emin misiniz?`)) return;
+            await supabaseClient.from('servis_kayitlari').delete().eq('id', id);
+            loadRecords();
         }
 
         function updatePlakaSuggestions() {
             const datalist = document.getElementById('plaka-suggestions');
             if (!datalist) return;
             datalist.innerHTML = '';
-
             const uniquePlakas = [...new Set(allRecords.map(r => r.plaka).filter(Boolean))];
             uniquePlakas.forEach(plaka => {
                 const option = document.createElement('option');
@@ -765,37 +696,27 @@
 
         async function loadRecords() {
             try {
-                const { data, error } = await supabaseClient
+                const { data } = await supabaseClient
                     .from('servis_kayitlari')
                     .select('*')
                     .order('created_at', { ascending: false });
 
                 document.getElementById('loading').style.display = 'none';
-
-                if (error) {
-                    document.getElementById('records-list').innerHTML = `<div class="card" style="border-left-color:red; padding:10px;">Veri çekilemedi: ${error.message}</div>`;
-                    return;
-                }
-
                 allRecords = data || [];
                 
                 document.getElementById('total-count').innerText = allRecords.length;
-                const guaranteed = allRecords.filter(r => r.garanti_bitis).length;
-                document.getElementById('guarantee-count').innerText = guaranteed;
+                document.getElementById('guarantee-count').innerText = allRecords.filter(r => r.garanti_bitis).length;
 
                 updatePlakaSuggestions();
                 checkSession();
                 filterRecords();
-
             } catch (err) {
                 document.getElementById('loading').style.display = 'none';
-                console.error(err);
             }
         }
 
         function filterRecords() {
             const query = document.getElementById('search-input').value.toLowerCase();
-            
             let filtered = allRecords.filter(r => 
                 (r.plaka && r.plaka.toLowerCase().includes(query)) ||
                 (r.yapilan_islem && r.yapilan_islem.toLowerCase().includes(query)) ||
@@ -803,7 +724,7 @@
             );
 
             if (currentFilter === 'guarantee') {
-                filtered = filtered.filter(r => r.garanti_bitis !== null && r.garanti_bitis !== '');
+                filtered = filtered.filter(r => r.garanti_bitis);
             }
 
             renderList(filtered);
@@ -814,7 +735,7 @@
             container.innerHTML = '';
 
             if (records.length === 0) {
-                container.innerHTML = '<div class="card" style="text-align:center; padding:16px; color:#64748b;">Kayıt bulunamadı.</div>';
+                container.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b; font-size:0.85em;">Kayıt bulunamadı.</div>';
                 return;
             }
 
@@ -822,66 +743,63 @@
                 const card = document.createElement('div');
                 card.className = 'card';
                 
-                let actionsHtml = '';
-                if (isLoggedIn) {
-                    actionsHtml = `
-                        <div class="card-actions">
-                            <button class="btn-action btn-edit" onclick="openEditRecordModal(${item.id})">✏️ Düzenle</button>
-                            <button class="btn-action btn-delete" onclick="deleteRecord(${item.id}, '${item.plaka}')">🗑️ Sil</button>
-                        </div>
-                    `;
-                }
-
                 const phone = extractPhoneNumber(item.sofor_bilgi);
                 let contactBtns = '';
                 if (phone) {
                     contactBtns = `
-                        <span class="contact-actions">
-                            <a href="tel:${phone}" class="btn-call">📞 Ara</a>
-                            <a href="https://wa.me/90${phone.substring(1)}" target="_blank" class="btn-wp">💬 WP</a>
+                        <span class="contact-links">
+                            <a href="tel:${phone}" class="contact-link">Ara</a>
+                            <a href="https://wa.me/90${phone.substring(1)}" target="_blank" class="contact-link">WhatsApp</a>
                         </span>
                     `;
                 }
 
-                const photoIcon = item.foto_url ? '🖼️' : '';
+                // Sadece giriş yapılmışsa ok simgesi ve tıklama özelliği ekle
+                const clickableClass = isLoggedIn ? 'clickable' : '';
+                const arrowHtml = isLoggedIn ? `<span id="arrow-${item.id}" class="arrow-icon">▼</span>` : '';
 
                 card.innerHTML = `
-                    <div class="card-summary" onclick="toggleCard(${item.id})">
+                    <div class="card-summary ${clickableClass}" onclick="toggleCard(${item.id})">
                         <div class="summary-left">
                             <span class="plaka-badge">${item.plaka}</span>
-                            <span class="summary-title">${photoIcon} ${item.yapilan_islem}</span>
+                            <span class="summary-title">${item.yapilan_islem}</span>
                         </div>
                         <div class="summary-right">
-                            <span class="tarih">📅 ${formatDate(item.tarih)}</span>
-                            <span id="arrow-${item.id}" class="arrow-icon">▼</span>
+                            <span class="tarih">${formatDate(item.tarih)}</span>
+                            ${arrowHtml}
                         </div>
                     </div>
 
-                    <div id="details-${item.id}" class="card-details">
-                        <div class="islem-text">🔧 <b>Yapılan İşlem:</b> ${item.yapilan_islem}</div>
-                        
-                        <div class="badges-row">
-                            ${(isLoggedIn && item.ucret) ? `<span class="badge badge-ucret">💰 ${item.ucret}</span>` : ''}
-                            ${item.garanti_bitis ? `<span class="badge badge-garanti">🛡 Garanti: ${formatDate(item.garanti_bitis)}</span>` : ''}
-                            ${item.sofor_bilgi ? `<span class="badge badge-sofor">👤 ${item.sofor_bilgi} ${contactBtns}</span>` : ''}
-                        </div>
-
-                        ${item.foto_url ? `
-                            <div class="img-thumb-container">
-                                <img src="${item.foto_url}" class="img-thumb" loading="lazy" onclick="openLightbox('${item.foto_url}')">
+                    ${isLoggedIn ? `
+                        <div id="details-${item.id}" class="card-details">
+                            <div class="detail-row">
+                                <span class="detail-label">İşlem Detayı:</span><br>${item.yapilan_islem}
                             </div>
-                        ` : ''}
+                            
+                            <div class="badges-row">
+                                ${item.ucret ? `<span class="badge">Ücret: ${item.ucret}</span>` : ''}
+                                ${item.garanti_bitis ? `<span class="badge">Garanti: ${formatDate(item.garanti_bitis)}</span>` : ''}
+                                ${item.sofor_bilgi ? `<span class="badge">Şoför: ${item.sofor_bilgi} ${contactBtns}</span>` : ''}
+                            </div>
 
-                        ${actionsHtml}
-                    </div>
+                            ${item.foto_url ? `
+                                <div class="img-container">
+                                    <img src="${item.foto_url}" class="img-thumb" loading="lazy" onclick="openLightbox('${item.foto_url}')">
+                                </div>
+                            ` : ''}
+
+                            <div class="card-actions">
+                                <button class="btn-action" onclick="openEditRecordModal(${item.id})">Düzenle</button>
+                                <button class="btn-action btn-delete" onclick="deleteRecord(${item.id}, '${item.plaka}')">Sil</button>
+                            </div>
+                        </div>
+                    ` : ''}
                 `;
                 container.appendChild(card);
             });
         }
 
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.ready();
-        }
+        if (window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.ready();
         loadRecords();
     </script>
 </body>
