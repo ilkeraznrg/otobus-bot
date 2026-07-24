@@ -56,8 +56,20 @@ supabase: Client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 # Konuşma Adımları (States)
 PLAKA, ISLEM, GARANTI, UCRET, SOFOR, FOTO = range(6)
 
-def format_plaka(plaka: str) -> str:
-    return re.sub(r"\s+", " ", plaka.strip().upper())
+def format_plaka_standart(raw_text: str) -> str:
+    """
+    Kullanıcının girdiği plakayı temizler ve harften sonraki rakamı 4 haneye tamamlar.
+    Örn: '46h94' -> '46 H 0094', '46 h 123' -> '46 H 0123'
+    """
+    clean_text = re.sub(r"\s+", "", raw_text.upper())
+    plaka_regex = r"^(0[1-9]|[1-8][0-9])([A-Z]{1,3})(\d{1,4})$"
+    match = re.match(plaka_regex, clean_text)
+    
+    if match:
+        il, harf, rakam = match.groups()
+        rakam_padded = rakam.zfill(4) # Rakamın solunu 4 haneye tamamlayacak şekilde 0 ekler
+        return f"{il} {harf} {rakam_padded}"
+    return None
 
 def format_date_for_display(date_str: str) -> str:
     """YYYY-MM-DD formatındaki tarihi GG.AA.YYYY yapar."""
