@@ -268,19 +268,17 @@
             outline: none;
         }
 
-        /* FOTOĞRAF YÜKLEME VE KAMERA BUTONLARI */
-        .photo-actions { display: flex; gap: 8px; margin-top: 6px; }
-        .btn-photo-opt {
-            flex: 1;
+        /* FOTOĞRAF ALANI STİLLERİ */
+        .file-custom-input {
+            width: 100%;
             padding: 8px;
-            background: #f8fafc;
+            margin-top: 4px;
             border: 1px solid var(--border-dark);
             border-radius: 6px;
-            font-size: 0.75em;
-            font-weight: 600;
-            color: #334155;
+            font-size: 0.8em;
+            background: #f8fafc;
+            color: var(--text-main);
             cursor: pointer;
-            text-align: center;
         }
 
         .photo-preview-box {
@@ -421,14 +419,8 @@
                 <button type="button" class="btn-remove-photo" onclick="removeCurrentPhoto()">Kaldır</button>
             </div>
 
-            <div class="photo-actions">
-                <button type="button" class="btn-photo-opt" onclick="triggerFileSelect('gallery')">📁 Galeriden Seç</button>
-                <button type="button" class="btn-photo-opt" onclick="triggerFileSelect('camera')">📷 Fotoğraf Çek</button>
-            </div>
-
-            <!-- Gizli Dosya Girdileri -->
-            <input type="file" id="rec-foto-gallery" accept="image/*" style="display:none;" onchange="handleFileChange(this)">
-            <input type="file" id="rec-foto-camera" accept="image/*" capture="environment" style="display:none;" onchange="handleFileChange(this)">
+            <!-- Doğrudan Mobil Destekli Dosya / Kamera Girdisi -->
+            <input type="file" id="rec-foto-input" accept="image/*" class="file-custom-input" onchange="handleFileChange(this)">
 
             <button id="save-btn" class="btn-save" onclick="saveRecord()">Kaydet</button>
             <button class="btn-cancel" onclick="closeModal('record-modal')">İptal</button>
@@ -491,14 +483,6 @@
             document.getElementById('lightbox-modal').style.display = 'none';
         }
 
-        function triggerFileSelect(source) {
-            if (source === 'camera') {
-                document.getElementById('rec-foto-camera').click();
-            } else {
-                document.getElementById('rec-foto-gallery').click();
-            }
-        }
-
         function handleFileChange(inputElem) {
             if (inputElem.files && inputElem.files[0]) {
                 activeSelectedFile = inputElem.files[0];
@@ -518,8 +502,7 @@
             isPhotoDeleted = true;
             document.getElementById('existing-foto-url').value = '';
             document.getElementById('photo-preview-box').style.display = 'none';
-            document.getElementById('rec-foto-gallery').value = '';
-            document.getElementById('rec-foto-camera').value = '';
+            document.getElementById('rec-foto-input').value = '';
         }
 
         function toggleCard(id) {
@@ -588,8 +571,7 @@
             activeSelectedFile = null;
             isPhotoDeleted = false;
             document.getElementById('photo-preview-box').style.display = 'none';
-            document.getElementById('rec-foto-gallery').value = '';
-            document.getElementById('rec-foto-camera').value = '';
+            document.getElementById('rec-foto-input').value = '';
 
             document.getElementById('record-modal').style.display = 'flex';
             document.getElementById('record-error').style.display = 'none';
@@ -610,8 +592,7 @@
             
             activeSelectedFile = null;
             isPhotoDeleted = false;
-            document.getElementById('rec-foto-gallery').value = '';
-            document.getElementById('rec-foto-camera').value = '';
+            document.getElementById('rec-foto-input').value = '';
 
             if (item.foto_url) {
                 document.getElementById('preview-img-elem').src = item.foto_url;
