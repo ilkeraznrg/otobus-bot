@@ -504,7 +504,6 @@
                 activeSelectedFile = inputElem.files[0];
                 isPhotoDeleted = false;
                 
-                // Önizleme kutusunu göster
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     document.getElementById('preview-img-elem').src = e.target.result;
