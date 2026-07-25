@@ -127,46 +127,31 @@
         .chip.active { background: #0f172a; color: white; }
 
         .chip-date-input {
-    background: #f1f5f9;
-    border: 1px solid var(--border-dark);
-    padding: 3px 8px;
-    border-radius: 14px;
-    font-size: 0.75em;
-    font-family: inherit;
-    color: var(--text-muted);
-    outline: none;
-    cursor: pointer;
-    position: relative;
-}
-
-/* Tarih seçilmemişken görünecek metin */
-        .chip-date-input {
             background: #f1f5f9;
             border: 1px solid var(--border-dark);
-            padding: 5px 12px;
+            padding: 3px 8px;
             border-radius: 14px;
             font-size: 0.75em;
-            font-weight: 500;
             font-family: inherit;
             color: var(--text-muted);
             outline: none;
             cursor: pointer;
-            flex-shrink: 0;
-            height: 27px;
-            white-space: nowrap;
+            position: relative;
         }
         .chip-date-input:focus { border-color: var(--primary); background: #ffffff; }
 
+        /* Tarih Seçici Varsayılan Metin */
+        .chip-date-input:invalid::-webkit-datetime-edit { color: transparent; }
+        .chip-date-input:before {
+            content: "Tarih Seç";
+            color: var(--text-muted);
+        }
+        .chip-date-input:focus:before,
+        .chip-date-input:valid:before { display: none; }
 
         /* COMPACT SHEET LİSTE STİLLERİ */
-        .sheet-list {
-            border-top: 1px solid var(--border-dark);
-        }
-
-        .sheet-item {
-            border-bottom: 1px solid var(--border);
-            transition: background-color 0.15s;
-        }
+        .sheet-list { border-top: 1px solid var(--border-dark); }
+        .sheet-item { border-bottom: 1px solid var(--border); transition: background-color 0.15s; }
 
         .sheet-summary {
             padding: 12px 0;
@@ -203,7 +188,7 @@
         .tarih-text { font-size: 0.75em; color: var(--text-muted); font-weight: 400; }
         .arrow-icon { font-size: 0.65em; color: #94a3b8; margin-left: 2px; }
 
-        /* COMPACT DETAY ALANI */
+        /* DETAY ALANI */
         .sheet-details {
             display: none;
             padding: 10px 0 14px 0;
@@ -283,6 +268,41 @@
             outline: none;
         }
 
+        /* FOTOĞRAF YÜKLEME VE KAMERA BUTONLARI */
+        .photo-actions { display: flex; gap: 8px; margin-top: 6px; }
+        .btn-photo-opt {
+            flex: 1;
+            padding: 8px;
+            background: #f8fafc;
+            border: 1px solid var(--border-dark);
+            border-radius: 6px;
+            font-size: 0.75em;
+            font-weight: 600;
+            color: #334155;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .photo-preview-box {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px;
+            background: #f8fafc;
+            border: 1px solid var(--border-dark);
+            border-radius: 6px;
+            margin-top: 6px;
+        }
+        .preview-img-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
+        .btn-remove-photo {
+            background: transparent;
+            color: var(--danger);
+            border: none;
+            font-size: 0.75em;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
         .btn-save {
             width: 100%;
             padding: 10px;
@@ -350,9 +370,7 @@
             <div class="chip" onclick="setDateFilter('today', this)">Bugün</div>
             <div class="chip" onclick="setDateFilter('week', this)">Bu Hafta</div>
             <div class="chip" onclick="setDateFilter('month', this)">Bu Ay</div>
-            <input type="text" id="custom-date-picker" class="chip-date-input" placeholder="Tarih Seç" onfocus="(this.type='date')" onblur="if(!this.value) this.type='text'" onchange="setDateFilter('custom', this)">
-
-
+            <input type="date" id="custom-date-picker" class="chip-date-input" required onchange="setDateFilter('custom', this)">
         </div>
 
         <div id="loading" class="loader">Yükleniyor...</div>
@@ -394,8 +412,23 @@
             <label>Şoför / İletişim</label>
             <input type="text" id="rec-sofor" placeholder="Örn: Ahmet - 0532 000 0000">
 
-            <label id="foto-label">Servis Fotoğrafı</label>
-            <input type="file" id="rec-foto" accept="image/*">
+            <label>Servis Fotoğrafı</label>
+            
+            <!-- Mevcut Fotoğraf Önizleme Ve Silme Kutusu -->
+            <div id="photo-preview-box" class="photo-preview-box">
+                <img id="preview-img-elem" class="preview-img-thumb" src="" alt="Mevcut Görsel">
+                <span style="font-size:0.75em; color:#64748b; flex:1; margin-left:8px;">Mevcut Fotoğraf</span>
+                <button type="button" class="btn-remove-photo" onclick="removeCurrentPhoto()">Kaldır</button>
+            </div>
+
+            <div class="photo-actions">
+                <button type="button" class="btn-photo-opt" onclick="triggerFileSelect('gallery')">📁 Galeriden Seç</button>
+                <button type="button" class="btn-photo-opt" onclick="triggerFileSelect('camera')">📷 Fotoğraf Çek</button>
+            </div>
+
+            <!-- Gizli Dosya Girdileri -->
+            <input type="file" id="rec-foto-gallery" accept="image/*" style="display:none;" onchange="handleFileChange(this)">
+            <input type="file" id="rec-foto-camera" accept="image/*" capture="environment" style="display:none;" onchange="handleFileChange(this)">
 
             <button id="save-btn" class="btn-save" onclick="saveRecord()">Kaydet</button>
             <button class="btn-cancel" onclick="closeModal('record-modal')">İptal</button>
@@ -418,6 +451,8 @@
         let currentFilter = 'all';
         let selectedDateFilter = 'all';
         let selectedCustomDate = '';
+        let activeSelectedFile = null;
+        let isPhotoDeleted = false;
 
         const INACTIVITY_LIMIT = 15 * 60 * 1000;
         let inactivityTimer;
@@ -454,6 +489,38 @@
 
         function closeLightbox() {
             document.getElementById('lightbox-modal').style.display = 'none';
+        }
+
+        function triggerFileSelect(source) {
+            if (source === 'camera') {
+                document.getElementById('rec-foto-camera').click();
+            } else {
+                document.getElementById('rec-foto-gallery').click();
+            }
+        }
+
+        function handleFileChange(inputElem) {
+            if (inputElem.files && inputElem.files[0]) {
+                activeSelectedFile = inputElem.files[0];
+                isPhotoDeleted = false;
+                
+                // Önizleme kutusunu göster
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('preview-img-elem').src = e.target.result;
+                    document.getElementById('photo-preview-box').style.display = 'flex';
+                };
+                reader.readAsDataURL(activeSelectedFile);
+            }
+        }
+
+        function removeCurrentPhoto() {
+            activeSelectedFile = null;
+            isPhotoDeleted = true;
+            document.getElementById('existing-foto-url').value = '';
+            document.getElementById('photo-preview-box').style.display = 'none';
+            document.getElementById('rec-foto-gallery').value = '';
+            document.getElementById('rec-foto-camera').value = '';
         }
 
         function toggleCard(id) {
@@ -518,7 +585,13 @@
             document.getElementById('rec-garanti').value = "";
             document.getElementById('rec-ucret').value = "";
             document.getElementById('rec-sofor').value = "";
-            document.getElementById('rec-foto').value = "";
+            
+            activeSelectedFile = null;
+            isPhotoDeleted = false;
+            document.getElementById('photo-preview-box').style.display = 'none';
+            document.getElementById('rec-foto-gallery').value = '';
+            document.getElementById('rec-foto-camera').value = '';
+
             document.getElementById('record-modal').style.display = 'flex';
             document.getElementById('record-error').style.display = 'none';
         }
@@ -535,7 +608,18 @@
             document.getElementById('rec-garanti').value = item.garanti_bitis || "";
             document.getElementById('rec-ucret').value = item.ucret || "";
             document.getElementById('rec-sofor').value = item.sofor_bilgi || "";
-            document.getElementById('rec-foto').value = "";
+            
+            activeSelectedFile = null;
+            isPhotoDeleted = false;
+            document.getElementById('rec-foto-gallery').value = '';
+            document.getElementById('rec-foto-camera').value = '';
+
+            if (item.foto_url) {
+                document.getElementById('preview-img-elem').src = item.foto_url;
+                document.getElementById('photo-preview-box').style.display = 'flex';
+            } else {
+                document.getElementById('photo-preview-box').style.display = 'none';
+            }
 
             document.getElementById('record-modal').style.display = 'flex';
             document.getElementById('record-error').style.display = 'none';
@@ -590,7 +674,6 @@
             const garanti = document.getElementById('rec-garanti').value;
             const ucret = document.getElementById('rec-ucret').value.trim();
             const sofor = document.getElementById('rec-sofor').value.trim();
-            const fotoFile = document.getElementById('rec-foto').files[0];
             const errDiv = document.getElementById('record-error');
             const saveBtn = document.getElementById('save-btn');
 
@@ -619,11 +702,11 @@
                     await supabaseClient.from('otobusler').insert([{ plaka: formattedPlaka }]);
                 }
 
-                let finalFotoUrl = existingFotoUrl;
+                let finalFotoUrl = isPhotoDeleted ? null : existingFotoUrl;
 
-                if (fotoFile) {
+                if (activeSelectedFile) {
                     const filePath = `${formattedPlaka}_${Date.now()}.jpg`;
-                    const { error: stErr } = await supabaseClient.storage.from('servis-fotolari').upload(filePath, fotoFile, { contentType: 'image/jpeg' });
+                    const { error: stErr } = await supabaseClient.storage.from('servis-fotolari').upload(filePath, activeSelectedFile, { contentType: 'image/jpeg' });
                     if (!stErr) {
                         const { data: pUrl } = supabaseClient.storage.from('servis-fotolari').getPublicUrl(filePath);
                         finalFotoUrl = pUrl.publicUrl;
