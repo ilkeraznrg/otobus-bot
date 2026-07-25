@@ -285,17 +285,26 @@
             display: none;
             align-items: center;
             justify-content: space-between;
-            padding: 8px;
+            padding: 8px 10px;
             background: #f8fafc;
             border: 1px solid var(--border-dark);
             border-radius: 6px;
-            margin-top: 6px;
+            margin-top: 8px;
+            margin-bottom: 8px;
         }
-        .preview-img-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; }
+        .preview-img-thumb { 
+            width: 44px; 
+            height: 44px; 
+            object-fit: cover; 
+            border-radius: 4px; 
+            border: 1px solid var(--border-dark);
+        }
         .btn-remove-photo {
-            background: transparent;
+            background: #fef2f2;
             color: var(--danger);
-            border: none;
+            border: 1px solid #fecaca;
+            padding: 5px 10px;
+            border-radius: 6px;
             font-size: 0.75em;
             font-weight: 600;
             cursor: pointer;
@@ -594,11 +603,14 @@
             isPhotoDeleted = false;
             document.getElementById('rec-foto-input').value = '';
 
-            if (item.foto_url) {
-                document.getElementById('preview-img-elem').src = item.foto_url;
-                document.getElementById('photo-preview-box').style.display = 'flex';
+            const previewBox = document.getElementById('photo-preview-box');
+            const previewImg = document.getElementById('preview-img-elem');
+
+            if (item.foto_url && item.foto_url.trim() !== "") {
+                previewImg.src = item.foto_url;
+                previewBox.style.display = 'flex';
             } else {
-                document.getElementById('photo-preview-box').style.display = 'none';
+                previewBox.style.display = 'none';
             }
 
             document.getElementById('record-modal').style.display = 'flex';
