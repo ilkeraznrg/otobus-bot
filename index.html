@@ -123,13 +123,18 @@
             color: var(--text-muted);
             white-space: nowrap;
             cursor: pointer;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            height: 28px;
         }
         .chip.active { background: #0f172a; color: white; }
 
+        /* YAN YANA HİZALANMIŞ TARİH SEÇİCİ */
         .chip-date-input {
             background: #f1f5f9;
             border: 1px solid var(--border-dark);
-            padding: 3px 8px;
+            padding: 0 10px;
             border-radius: 14px;
             font-size: 0.75em;
             font-family: inherit;
@@ -137,14 +142,22 @@
             outline: none;
             cursor: pointer;
             position: relative;
+            flex-shrink: 0;
+            height: 28px;
+            line-height: 26px;
+            box-sizing: border-box;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
         }
         .chip-date-input:focus { border-color: var(--primary); background: #ffffff; }
 
-        /* Tarih Seçici Varsayılan Metin */
+        /* Tarih Seçici Varsayılan Metin ve Hizalama */
         .chip-date-input:invalid::-webkit-datetime-edit { color: transparent; }
         .chip-date-input:before {
             content: "Tarih Seç";
             color: var(--text-muted);
+            font-weight: 500;
         }
         .chip-date-input:focus:before,
         .chip-date-input:valid:before { display: none; }
@@ -371,7 +384,7 @@
 
         <input type="text" id="search-input" class="search-box" placeholder="Plaka veya işlem ara..." onkeyup="filterRecords()">
 
-        <!-- HIZLI ZAMAN VE TARİH FİLTRELERİ -->
+        <!-- YAN YANA SIRALANAN HIZLI FİLTRE VE TARİH SEÇİCİ -->
         <div class="chips-row">
             <div class="chip active" onclick="setDateFilter('all', this)">Tümü</div>
             <div class="chip" onclick="setDateFilter('today', this)">Bugün</div>
