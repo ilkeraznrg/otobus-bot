@@ -78,7 +78,7 @@
             text-align: center;
         }
 
-        /* ISTATISTIK BARI */
+        /* İSTATİSTİK BARI */
         .stats-bar { display: flex; gap: 12px; margin: 16px 0 12px 0; border-bottom: 1px solid var(--border-dark); padding-bottom: 12px; }
         .stat-card {
             flex: 1;
@@ -89,7 +89,7 @@
         .stat-lbl { font-size: 0.7em; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
         .stat-card.active .stat-val { color: var(--primary); }
 
-        /* ARAMA KUTUSU */
+        /* ARAMA KUTUSU VE TARİH CHİPLERİ */
         .search-box {
             width: 100%;
             padding: 10px 12px;
@@ -106,6 +106,7 @@
         .chips-row {
             display: flex;
             gap: 6px;
+            align-items: center;
             overflow-x: auto;
             padding-bottom: 8px;
             margin-bottom: 8px;
@@ -115,7 +116,7 @@
         .chip {
             background: #f1f5f9;
             border: 1px solid transparent;
-            padding: 4px 10px;
+            padding: 5px 12px;
             border-radius: 14px;
             font-size: 0.75em;
             font-weight: 500;
@@ -125,7 +126,20 @@
         }
         .chip.active { background: #0f172a; color: white; }
 
-        /* COMPACT SHEET LISTE STİLLERİ */
+        .chip-date-input {
+            background: #f1f5f9;
+            border: 1px solid var(--border-dark);
+            padding: 3px 8px;
+            border-radius: 14px;
+            font-size: 0.75em;
+            font-family: inherit;
+            color: var(--text-muted);
+            outline: none;
+            cursor: pointer;
+        }
+        .chip-date-input:focus { border-color: var(--primary); background: #ffffff; }
+
+        /* COMPACT SHEET LİSTE STİLLERİ */
         .sheet-list {
             border-top: 1px solid var(--border-dark);
         }
@@ -311,11 +325,13 @@
 
         <input type="text" id="search-input" class="search-box" placeholder="Plaka veya işlem ara..." onkeyup="filterRecords()">
 
+        <!-- HIZLI ZAMAN VE TARİH FİLTRELERİ -->
         <div class="chips-row">
-            <div class="chip active" onclick="setChipFilter('', this)">Tümü</div>
-            <div class="chip" onclick="setChipFilter('46 H', this)">46 H</div>
-            <div class="chip" onclick="setChipFilter('46 K', this)">46 K</div>
-            <div class="chip" onclick="setChipFilter('46 J', this)">46 J</div>
+            <div class="chip active" onclick="setDateFilter('all', this)">Tümü</div>
+            <div class="chip" onclick="setDateFilter('today', this)">Bugün</div>
+            <div class="chip" onclick="setDateFilter('week', this)">Bu Hafta</div>
+            <div class="chip" onclick="setDateFilter('month', this)">Bu Ay</div>
+            <input type="date" id="custom-date-picker" class="chip-date-input" onchange="setDateFilter('custom', this)">
         </div>
 
         <div id="loading" class="loader">Yükleniyor...</div>
@@ -379,6 +395,8 @@
         let allRecords = [];
         let isLoggedIn = false;
         let currentFilter = 'all';
+        let selectedDateFilter = 'all';
+        let selectedCustomDate = '';
 
         const INACTIVITY_LIMIT = 15 * 60 * 1000;
         let inactivityTimer;
@@ -509,10 +527,17 @@
             filterRecords();
         }
 
-        function setChipFilter(text, el) {
+        function setDateFilter(type, el) {
             document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-            el.classList.add('active');
-            document.getElementById('search-input').value = text;
+            
+            if (type !== 'custom') {
+                el.classList.add('active');
+                document.getElementById('custom-date-picker').value = '';
+            } else {
+                selectedCustomDate = el.value;
+            }
+
+            selectedDateFilter = type;
             filterRecords();
         }
 
@@ -653,11 +678,37 @@
 
         function filterRecords() {
             const query = document.getElementById('search-input').value.toLowerCase();
-            let filtered = allRecords.filter(r => 
-                (r.plaka && r.plaka.toLowerCase().includes(query)) ||
-                (r.yapilan_islem && r.yapilan_islem.toLowerCase().includes(query)) ||
-                (r.sofor_bilgi && r.sofor_bilgi.toLowerCase().includes(query))
-            );
+            const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];
+
+            const firstDayOfWeek = new Date(now);
+            const day = now.getDay() || 7; 
+            firstDayOfWeek.setDate(now.getDate() - day + 1);
+            const weekStartStr = firstDayOfWeek.toISOString().split('T')[0];
+
+            const monthStartStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+
+            let filtered = allRecords.filter(r => {
+                const matchesQuery = (r.plaka && r.plaka.toLowerCase().includes(query)) ||
+                                     (r.yapilan_islem && r.yapilan_islem.toLowerCase().includes(query)) ||
+                                     (r.sofor_bilgi && r.sofor_bilgi.toLowerCase().includes(query));
+
+                if (!matchesQuery) return false;
+
+                const itemDate = r.tarih;
+
+                if (selectedDateFilter === 'today') {
+                    return itemDate === todayStr;
+                } else if (selectedDateFilter === 'week') {
+                    return itemDate >= weekStartStr && itemDate <= todayStr;
+                } else if (selectedDateFilter === 'month') {
+                    return itemDate >= monthStartStr && itemDate <= todayStr;
+                } else if (selectedDateFilter === 'custom' && selectedCustomDate) {
+                    return itemDate === selectedCustomDate;
+                }
+
+                return true;
+            });
 
             if (currentFilter === 'guarantee') {
                 filtered = filtered.filter(r => r.garanti_bitis);
