@@ -400,7 +400,7 @@
     <!-- GİRİŞ MODAL -->
     <div id="login-modal" class="modal">
         <div class="modal-content">
-            <h3>Usta Girişi</h3>
+            <h3>Giriş</h3>
             <input type="text" id="login-username" placeholder="Kullanıcı Adı">
             <input type="password" id="login-password" placeholder="Şifre">
             <button class="btn-save" onclick="loginUser()">Giriş Yap</button>
@@ -553,7 +553,7 @@
                 resetInactivityTimer();
             } else {
                 isLoggedIn = false;
-                authBtn.innerText = 'Usta Girişi';
+                authBtn.innerText = 'Giriş';
                 authBtn.classList.remove('logout');
                 if (addBtn) addBtn.style.display = 'none';
                 clearTimeout(inactivityTimer);
