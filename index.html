@@ -140,17 +140,23 @@
 }
 
 /* Tarih seçilmemişken görünecek metin */
-.chip-date-input:invalid::-webkit-datetime-edit {
-    color: transparent;
-}
-.chip-date-input:before {
-    content: "Tarih Seç";
-    color: var(--text-muted);
-}
-.chip-date-input:focus:before,
-.chip-date-input:valid:before {
-    display: none;
-}
+        .chip-date-input {
+            background: #f1f5f9;
+            border: 1px solid var(--border-dark);
+            padding: 5px 12px;
+            border-radius: 14px;
+            font-size: 0.75em;
+            font-weight: 500;
+            font-family: inherit;
+            color: var(--text-muted);
+            outline: none;
+            cursor: pointer;
+            flex-shrink: 0;
+            height: 27px;
+            white-space: nowrap;
+        }
+        .chip-date-input:focus { border-color: var(--primary); background: #ffffff; }
+
 
         /* COMPACT SHEET LİSTE STİLLERİ */
         .sheet-list {
@@ -344,7 +350,8 @@
             <div class="chip" onclick="setDateFilter('today', this)">Bugün</div>
             <div class="chip" onclick="setDateFilter('week', this)">Bu Hafta</div>
             <div class="chip" onclick="setDateFilter('month', this)">Bu Ay</div>
-            <input type="date" id="custom-date-picker" class="chip-date-input" required onchange="setDateFilter('custom', this)">
+            <input type="text" id="custom-date-picker" class="chip-date-input" placeholder="Tarih Seç" onfocus="(this.type='date')" onblur="if(!this.value) this.type='text'" onchange="setDateFilter('custom', this)">
+
 
         </div>
 
