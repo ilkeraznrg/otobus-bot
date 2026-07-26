@@ -653,25 +653,49 @@
             filterRecords();
         }
 
-        async function loginUser() {
-            const kAdi = document.getElementById('login-username').value.trim();
-            const sifre = document.getElementById('login-password').value.trim();
+        let failedAttempts = 0;
+let lockoutUntil = null;
 
-            const { data } = await supabaseClient
-                .from('yetkili_kullanicilar')
-                .select('*')
-                .eq('kullanici_adi', kAdi)
-                .eq('sifre', sifre);
+async function loginUser() {
+    const errorDiv = document.getElementById('login-error');
 
-            if (data && data.length > 0) {
-                localStorage.setItem('panel_user', kAdi);
-                closeModal('login-modal');
-                checkSession();
-                filterRecords();
-            } else {
-                document.getElementById('login-error').style.display = 'block';
-            }
+    // Eğer engellenmişse kontrol et
+    if (lockoutUntil && new Date() < lockoutUntil) {
+        const remainingSec = Math.ceil((lockoutUntil - new Date()) / 1000);
+        errorDiv.innerText = `Çok fazla hatalı deneme! Lütfen ${remainingSec} saniye bekleyin.`;
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    const kAdi = document.getElementById('login-username').value.trim();
+    const sifre = document.getElementById('login-password').value.trim();
+
+    const { data } = await supabaseClient
+        .from('yetkili_kullanicilar')
+        .select('*')
+        .eq('kullanici_adi', kAdi)
+        .eq('sifre', sifre);
+
+    if (data && data.length > 0) {
+        failedAttempts = 0; // Başarılı girişte sıfırla
+        lockoutUntil = null;
+        localStorage.setItem('panel_user', kAdi);
+        closeModal('login-modal');
+        checkSession();
+        loadRecords(); // Giriş yapılınca verileri çek
+    } else {
+        failedAttempts++;
+        if (failedAttempts >= 3) {
+            // 3 hatalı denemede 3 dakika kilitle
+            lockoutUntil = new Date(Date.now() + 3 * 60 * 1000);
+            errorDiv.innerText = "3 kez hatalı giriş yapıldı. Sistem 3 dakika kilitlendi!";
+        } else {
+            errorDiv.innerText = `Hatalı kullanıcı adı veya şifre! (Kalan hak: ${3 - failedAttempts})`;
         }
+        errorDiv.style.display = 'block';
+    }
+}
+
 
         async function saveRecord() {
             const recId = document.getElementById('rec-id').value;
